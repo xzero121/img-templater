@@ -116,6 +116,11 @@
         <input id="newVarKey" placeholder="e.g., title" />
         <button class="btn" id="addVar">Add</button>
       </div>
+      <div class="uirow" style="margin-top:8px">
+        <label>Import from CSV</label>
+        <input type="file" id="csvFile" accept=".csv,text/csv" />
+      </div>
+      <div class="hint" style="margin-top:4px">CSV: first row = variable names, second row = values</div>
     </div>
 
     <div class="card"><h2>Fields</h2>
@@ -203,6 +208,7 @@
   const newVarKey = document.getElementById('newVarKey');
   const addVarBtn = document.getElementById('addVar');
   const varSelect = document.getElementById('varSelect');
+  const csvFile = document.getElementById('csvFile');
 
   const addFieldBtn = document.getElementById('addField');
   const btnDuplicate = document.getElementById('btnDuplicate');
@@ -259,6 +265,27 @@
     return n;
   }
 
+  // Resolve template string with variables: "Hello {{name}}" -> "Hello John"
+  function resolveTemplate(template, variables){
+    if(!template) return '';
+    return template.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
+      return variables[varName] !== undefined ? variables[varName] : match;
+    });
+  }
+
+  // Get text for a field, supporting both old varKey and new template modes
+  function getFieldText(f){
+    // New template mode: field has a 'template' property with {{variable}} syntax
+    if(f.template !== undefined){
+      return resolveTemplate(f.template, state.variables);
+    }
+    // Legacy mode: field has a varKey that maps to a single variable
+    if(f.varKey){
+      return state.variables[f.varKey] ?? '';
+    }
+    return '';
+  }
+
   function updateStatus(){
     const f = state.fields.length;
     const v = Object.keys(state.variables).length;
@@ -289,6 +316,59 @@
     if(!key) return;
     if(state.variables[key]){ alert('Variable already exists.'); return; }
     state.variables[key]=""; newVarKey.value=''; refreshVarList();
+  });
+
+  // CSV import
+  csvFile.addEventListener('change', (e)=>{
+    const file = e.target.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const csvText = reader.result;
+      const lines = csvText.split('\n').filter(line => line.trim());
+      if(lines.length < 2){ alert('CSV must have at least 2 rows (headers and values)'); return; }
+      
+      // Parse CSV (simple parser, handles quotes)
+      const parseCSVLine = (line) => {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        for(let i = 0; i < line.length; i++){
+          const char = line[i];
+          const nextChar = line[i+1];
+          if(char === '"'){
+            if(inQuotes && nextChar === '"'){
+              current += '"'; i++; // escaped quote
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if(char === ',' && !inQuotes){
+            result.push(current.trim());
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        result.push(current.trim());
+        return result;
+      };
+      
+      const headers = parseCSVLine(lines[0]);
+      const values = parseCSVLine(lines[1]);
+      
+      // Update variables
+      headers.forEach((key, idx) => {
+        const k = key.trim();
+        if(k && idx < values.length){
+          state.variables[k] = values[idx] || '';
+        }
+      });
+      
+      refreshVarList();
+      refreshOverlays();
+      updateStatus();
+      csvFile.value = ''; // reset input
+    };
+    reader.readAsText(file);
   });
 
   // Background loading
@@ -350,7 +430,7 @@
       const id = o.dataset.id;
       const f = state.fields.find(x=>x.id===id);
       if(!f) continue;
-      const text = state.variables[f.varKey] ?? '';
+      const text = getFieldText(f);
       const inner = o.querySelector('.overlay-inner');
       inner.textContent = text;
       inner.style.fontFamily = f.fontFamily;
@@ -378,7 +458,7 @@
     o.appendChild(inner); o.appendChild(handle);
 
     // Initial styles
-    inner.textContent = state.variables[f.varKey] ?? '';
+    inner.textContent = getFieldText(f);
     o.style.transform = `translate(${f.x*state.scale}px, ${f.y*state.scale}px)`;
     o.style.width = (f.w*state.scale)+'px';
 
@@ -487,7 +567,7 @@
     if(!oh){
       const tmp = document.createElement('canvas').getContext('2d');
       tmp.font = (f.italic? 'italic ' : '') + (f.bold? '700 ' : '400 ') + ' ' + f.fontSize + 'px ' + f.fontFamily;
-      const words = String(state.variables[f.varKey]||'').split(/\s+/);
+      const words = String(getFieldText(f)||'').split(/\s+/);
       let line='', lines=1; const lh = f.fontSize * (f.lineHeight||1.2);
       for(let i=0;i<words.length;i++){
         const t = line? line + ' ' + words[i] : words[i];
@@ -512,10 +592,23 @@
     const f = currentField();
     if(!f){ fieldInspector.appendChild(el('div', {class:'hint'}, 'No field selected. Click a field to edit.')); return; }
 
-    // Variable binding
-    const varSel = el('select', {onchange:(e)=>{ f.varKey=e.target.value; refreshOverlays(); }}, ...Object.keys(state.variables).map(k=>{
+    // Variable binding (legacy mode)
+    const varSel = el('select', {onchange:(e)=>{ f.varKey=e.target.value; delete f.template; refreshOverlays(); }}, ...Object.keys(state.variables).map(k=>{
       const opt = el('option', {value:k}, k); if(k===f.varKey) opt.selected=true; return opt; }));
-    fieldInspector.appendChild(inspectorControl('Variable', varSel));
+    fieldInspector.appendChild(inspectorControl('Variable (legacy)', varSel));
+
+    // Template mode (new)
+    const templateInput = el('textarea', {
+      placeholder:'e.g., Hello {{name}}, your price is {{price}}',
+      value: f.template !== undefined ? f.template : '',
+      oninput:(e)=>{ 
+        f.template = e.target.value; 
+        if(f.template) delete f.varKey; 
+        refreshOverlays(); 
+      }
+    });
+    fieldInspector.appendChild(inspectorControl('Template (use {{variable}})', templateInput));
+    fieldInspector.appendChild(el('div', {class:'hint', style:'margin-bottom:10px'}, 'Use template for multi-variable text, or variable for single value (legacy).'));
 
     // Font family (dropdown)
     const famSel = (function(){
@@ -549,7 +642,7 @@
     fieldInspector.appendChild(row2);
 
     // Align / Letter spacing / Line height
-    const align = el('select', {onchange:(e)=>{ f.align=e.target.value; refreshOverlays(); }}, ['left','center','right'].map(a=>{ const o=el('option',{value:a}, a); if(f.align===a)o.selected=true; return o; }));
+    const align = el('select', {onchange:(e)=>{ f.align=e.target.value; refreshOverlays(); }}, ...['left','center','right'].map(a=>{ const o=el('option',{value:a}, a); if(f.align===a)o.selected=true; return o; }));
     const lspace = el('input', {type:'number', value:f.letterSpacing, step:'0.5', oninput:(e)=>{ f.letterSpacing=parseFloat(e.target.value)||0; refreshOverlays(); }});
     const lheight = el('input', {type:'number', value:f.lineHeight, step:'0.05', oninput:(e)=>{ f.lineHeight=parseFloat(e.target.value)||1.2; refreshOverlays(); }});
     const row3 = el('div', {class:'uirow'}, inspectorControl('Align', align), inspectorControl('Letter spacing', lspace), inspectorControl('Line height', lheight));
@@ -629,9 +722,9 @@
       ctx.drawImage(img, 0, 0);
       // Draw each field
       for(const f of state.fields){
-        const text = state.variables[f.varKey] ?? '';
+        const text = getFieldText(f);
         ctx.save();
-        ctx.translate(f.x + 6, f.y + 6 + ((f.fontSize * (f.lineHeight||1.2) - f.fontSize)/2));
+        ctx.translate(f.x + 6, f.y + 6);
         
         ctx.font = `${f.italic? 'italic ':''}${f.bold? '700 ': '400 '} ${f.fontSize}px ${f.fontFamily}`;
         ctx.textBaseline = 'top';
