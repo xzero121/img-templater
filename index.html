@@ -167,12 +167,20 @@
             <option>PNG</option>
             <option>JPEG</option>
             <option>WebP</option>
+            <option>SVG</option>
           </select>
         </div>
         <div style="width:120px">
           <label>Quality</label>
           <input type="number" id="quality" min="0" max="1" step="0.05" value="0.92" />
         </div>
+      </div>
+      <div class="uirow" style="align-items:end; margin-top:8px">
+        <div style="flex:1">
+          <label>Output Scale</label>
+          <input type="number" id="exportScale" min="1" max="10" step="0.5" value="1" />
+        </div>
+        <div class="hint" style="flex:1; margin:0; padding-left:8px">Scale export (1x = original size)</div>
       </div>
       <div class="uirow" style="margin-top:8px; gap:8px">
         <button class="btn primary" id="btnExport">Export Image</button>
@@ -239,12 +247,17 @@
   const btnExport = document.getElementById('btnExport');
   const fmtSel = document.getElementById('fmt');
   const qInput = document.getElementById('quality');
+  const exportScaleInput = document.getElementById('exportScale');
     const btnClear = document.getElementById('btnClear');
   const btnBatchExport = document.getElementById('btnBatchExport');
   const batchHint = document.getElementById('batchHint');
 
   // Comprehensive font list including Google Fonts
   const presetFonts = [
+    // Custom fonts (user requested)
+    {label:'Aprila', value:'"Aprila", cursive'},
+    {label:'Bellaboo', value:'"Bellaboo", cursive'},
+    
     // Sans-serif fonts
     {label:'Arial', value:'Arial, Helvetica, sans-serif'},
     {label:'Helvetica', value:'Helvetica, Arial, sans-serif'},
@@ -813,60 +826,57 @@
     return lines;
   }
 
-  function exportImage(type, quality){
+  function exportImage(type, quality, scale = 1){
     if(!state.bg){ alert('Load a background image first.'); return; }
+    
+    // SVG export
+    if(type === 'SVG'){
+      exportSVG(scale);
+      return;
+    }
+    
+    // Raster export (PNG, JPEG, WebP) with scaling
     const cvs = document.createElement('canvas');
-    cvs.width = state.bgNatural.w; cvs.height = state.bgNatural.h;
+    cvs.width = state.bgNatural.w * scale;
+    cvs.height = state.bgNatural.h * scale;
     const ctx = cvs.getContext('2d');
 
     // Draw background
     const img = new Image(); img.onload = ()=>{
-      ctx.drawImage(img, 0, 0);
-      // Draw each field
+      ctx.drawImage(img, 0, 0, cvs.width, cvs.height);
+      // Draw each field with scaling
       for(const f of state.fields){
         const text = getFieldText(f);
         ctx.save();
-        ctx.translate(f.x + 6, f.y + 6);
+        ctx.translate((f.x + 6) * scale, (f.y + 6) * scale);
         
-        ctx.font = `${f.italic? 'italic ':''}${f.bold? '700 ': '400 '} ${f.fontSize}px ${f.fontFamily}`;
+        ctx.font = `${f.italic? 'italic ':''}${f.bold? '700 ': '400 '} ${f.fontSize * scale}px ${f.fontFamily}`;
         ctx.textBaseline = 'top';
         ctx.fillStyle = f.color || '#fff';
-        ctx.lineWidth = f.strokeWidth || 0;
+        ctx.lineWidth = (f.strokeWidth || 0) * scale;
         if(f.strokeWidth>0){ ctx.strokeStyle = f.strokeColor || '#000'; }
-        // handle align in wrapText by switching textAlign
-        if(f.strokeWidth>0){
-          // hacky stroke+fill by drawing twice
-          ctx.save();
-          ctx.textAlign = f.align;
-          const lines = text.split(/\n/);
-          let y=0;
-          for(let i=0;i<lines.length;i++){
-            const l = lines[i];
-            // manual wrap with measureText
-            // use hidden wrapText to count lines but strokeText per line for outline effect
-          }
-          ctx.restore();
-        }
-        // Proper wrapped draw
+        
         // align text like DOM overlay
         ctx.textAlign = (f.align==='center' ? 'center' : (f.align==='right' ? 'right' : 'left'));
-        ctx.letterSpacing = f.letterSpacing || 0; // not widely supported on canvas; ignored (kept for future)
+        ctx.letterSpacing = (f.letterSpacing || 0) * scale;
+        
         // Stroke first (if any), then fill. We'll implement simple wrap that draws both.
         const drawWrapped = (drawStroke=false)=>{
           const txt = (''+text).replace(/\r/g,'');
           const words = txt.split(/\s+/);
-          let line=''; let yy=0; const lh = f.fontSize * (f.lineHeight||1.2);
+          let line=''; let yy=0; const lh = f.fontSize * (f.lineHeight||1.2) * scale;
+          const maxWidth = (f.w - 12) * scale;
           for(let i=0;i<words.length;i++){
             const t = line ? line+" "+words[i] : words[i];
             const w = ctx.measureText(t).width;
-            if((f.w-12)>0 && w>(f.w-12) && i>0){
-              if(drawStroke){ ctx.strokeText(line, alignX(f.align, f.w-12), yy); }
-              else { ctx.fillText(line, alignX(f.align, f.w-12), yy); }
+            if(maxWidth > 0 && w > maxWidth && i>0){
+              if(drawStroke){ ctx.strokeText(line, alignX(f.align, maxWidth), yy); }
+              else { ctx.fillText(line, alignX(f.align, maxWidth), yy); }
               line=words[i]; yy += lh;
             } else { line = t; }
           }
-          if(drawStroke){ ctx.strokeText(line, alignX(f.align, f.w-12), yy); }
-          else{ ctx.fillText(line, alignX(f.align, f.w-12), yy); }
+          if(drawStroke){ ctx.strokeText(line, alignX(f.align, maxWidth), yy); }
+          else{ ctx.fillText(line, alignX(f.align, maxWidth), yy); }
         }
         function alignX(a, width){ if(a==='center') return width/2; if(a==='right') return width; return 0; }
 
@@ -882,9 +892,110 @@
     };
     img.src = state.bg;
   }
+  
+  // SVG export function
+  function exportSVG(scale = 1){
+    const width = state.bgNatural.w * scale;
+    const height = state.bgNatural.h * scale;
+    
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
+    
+    // Add background image
+    svg += `<image href="${state.bg}" width="${width}" height="${height}" preserveAspectRatio="none"/>`;
+    
+    // Add text fields
+    for(const f of state.fields){
+      const text = getFieldText(f);
+      const x = (f.x + 6) * scale;
+      const y = (f.y + 6) * scale;
+      const fontSize = f.fontSize * scale;
+      const lineHeight = fontSize * (f.lineHeight || 1.2);
+      
+      // Parse text and wrap
+      const words = (''+text).replace(/\r/g,'').split(/\s+/);
+      const maxWidth = (f.w - 12) * scale;
+      let lines = [];
+      let currentLine = '';
+      
+      // Simple word wrapping for SVG
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.font = `${f.italic? 'italic ':''}${f.bold? '700 ': '400 '} ${fontSize}px ${f.fontFamily}`;
+      
+      for(let i = 0; i < words.length; i++){
+        const testLine = currentLine ? currentLine + ' ' + words[i] : words[i];
+        const metrics = tempCtx.measureText(testLine);
+        if(maxWidth > 0 && metrics.width > maxWidth && i > 0){
+          lines.push(currentLine);
+          currentLine = words[i];
+        } else {
+          currentLine = testLine;
+        }
+      }
+      if(currentLine) lines.push(currentLine);
+      
+      // Create text group
+      svg += `<g>`;
+      
+      // Add stroke if needed
+      if(f.strokeWidth > 0){
+        for(let i = 0; i < lines.length; i++){
+          const lineY = y + (i * lineHeight);
+          let textX = x;
+          let anchor = 'start';
+          if(f.align === 'center'){ textX = x + maxWidth/2; anchor = 'middle'; }
+          else if(f.align === 'right'){ textX = x + maxWidth; anchor = 'end'; }
+          
+          svg += `<text x="${textX}" y="${lineY}" font-family="${f.fontFamily}" font-size="${fontSize}" `;
+          svg += `fill="none" stroke="${f.strokeColor || '#000'}" stroke-width="${f.strokeWidth * scale}" `;
+          svg += `text-anchor="${anchor}" dominant-baseline="text-before-edge"`;
+          if(f.bold) svg += ` font-weight="700"`;
+          if(f.italic) svg += ` font-style="italic"`;
+          svg += `>${escapeXML(lines[i])}</text>`;
+        }
+      }
+      
+      // Add fill text
+      for(let i = 0; i < lines.length; i++){
+        const lineY = y + (i * lineHeight);
+        let textX = x;
+        let anchor = 'start';
+        if(f.align === 'center'){ textX = x + maxWidth/2; anchor = 'middle'; }
+        else if(f.align === 'right'){ textX = x + maxWidth; anchor = 'end'; }
+        
+        svg += `<text x="${textX}" y="${lineY}" font-family="${f.fontFamily}" font-size="${fontSize}" `;
+        svg += `fill="${f.color || '#fff'}" text-anchor="${anchor}" dominant-baseline="text-before-edge"`;
+        if(f.bold) svg += ` font-weight="700"`;
+        if(f.italic) svg += ` font-style="italic"`;
+        svg += `>${escapeXML(lines[i])}</text>`;
+      }
+      
+      svg += `</g>`;
+    }
+    
+    svg += `</svg>`;
+    
+    // Download SVG
+    const blob = new Blob([svg], {type: 'image/svg+xml'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'flyer.svg';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  
+  function escapeXML(str){
+    return String(str).replace(/&/g, '&amp;')
+                      .replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;')
+                      .replace(/"/g, '&quot;')
+                      .replace(/'/g, '&apos;');
+  }
 
   btnExport.addEventListener('click', ()=>{
-    exportImage(fmtSel.value, parseFloat(qInput.value)||0.92);
+    const scale = parseFloat(exportScaleInput.value) || 1;
+    exportImage(fmtSel.value, parseFloat(qInput.value)||0.92, scale);
   });
 
   // Batch export for CSV data
@@ -894,6 +1005,7 @@
     
     const format = fmtSel.value;
     const quality = parseFloat(qInput.value)||0.92;
+    const scale = parseFloat(exportScaleInput.value) || 1;
     const totalRows = state.csvData.length;
     
     if(!confirm(`Export ${totalRows} images? This may take a moment.`)) return;
@@ -911,8 +1023,8 @@
       const originalVars = {...state.variables};
       state.variables = {...state.variables, ...rowData};
       
-      // Generate image
-      const dataURL = await generateImageDataURL(format, quality);
+      // Generate image with scale
+      const dataURL = await generateImageDataURL(format, quality, scale);
       
       // Store for download
       images.push({
@@ -943,46 +1055,59 @@
   });
   
   // Helper function to generate image as data URL
-  function generateImageDataURL(type, quality){
+  function generateImageDataURL(type, quality, scale = 1){
     return new Promise((resolve) => {
+      // SVG export for batch
+      if(type === 'SVG'){
+        // For SVG, we'll return a data URL of the SVG content
+        const svgContent = generateSVGContent(scale);
+        const blob = new Blob([svgContent], {type: 'image/svg+xml'});
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+        return;
+      }
+      
       const cvs = document.createElement('canvas');
-      cvs.width = state.bgNatural.w; cvs.height = state.bgNatural.h;
+      cvs.width = state.bgNatural.w * scale;
+      cvs.height = state.bgNatural.h * scale;
       const ctx = cvs.getContext('2d');
       
       const img = new Image();
       img.onload = ()=>{
-        ctx.drawImage(img, 0, 0);
+        ctx.drawImage(img, 0, 0, cvs.width, cvs.height);
         
         // Draw each field with current variables
         for(const f of state.fields){
           const text = getFieldText(f);
           ctx.save();
-          ctx.translate(f.x + 6, f.y + 6);
+          ctx.translate((f.x + 6) * scale, (f.y + 6) * scale);
           
-          ctx.font = `${f.italic? 'italic ':''}${f.bold? '700 ': '400 '} ${f.fontSize}px ${f.fontFamily}`;
+          ctx.font = `${f.italic? 'italic ':''}${f.bold? '700 ': '400 '} ${f.fontSize * scale}px ${f.fontFamily}`;
           ctx.textBaseline = 'top';
           ctx.fillStyle = f.color || '#fff';
-          ctx.lineWidth = f.strokeWidth || 0;
+          ctx.lineWidth = (f.strokeWidth || 0) * scale;
           if(f.strokeWidth>0){ ctx.strokeStyle = f.strokeColor || '#000'; }
           
           ctx.textAlign = (f.align==='center' ? 'center' : (f.align==='right' ? 'right' : 'left'));
-          ctx.letterSpacing = f.letterSpacing || 0;
+          ctx.letterSpacing = (f.letterSpacing || 0) * scale;
           
           const drawWrapped = (drawStroke=false)=>{
             const txt = (''+text).replace(/\r/g,'');
             const words = txt.split(/\s+/);
-            let line=''; let yy=0; const lh = f.fontSize * (f.lineHeight||1.2);
+            let line=''; let yy=0; const lh = f.fontSize * (f.lineHeight||1.2) * scale;
+            const maxWidth = (f.w - 12) * scale;
             for(let i=0;i<words.length;i++){
               const t = line ? line+" "+words[i] : words[i];
               const w = ctx.measureText(t).width;
-              if((f.w-12)>0 && w>(f.w-12) && i>0){
-                if(drawStroke){ ctx.strokeText(line, alignX(f.align, f.w-12), yy); }
-                else { ctx.fillText(line, alignX(f.align, f.w-12), yy); }
+              if(maxWidth > 0 && w > maxWidth && i>0){
+                if(drawStroke){ ctx.strokeText(line, alignX(f.align, maxWidth), yy); }
+                else { ctx.fillText(line, alignX(f.align, maxWidth), yy); }
                 line=words[i]; yy += lh;
               } else { line = t; }
             }
-            if(drawStroke){ ctx.strokeText(line, alignX(f.align, f.w-12), yy); }
-            else{ ctx.fillText(line, alignX(f.align, f.w-12), yy); }
+            if(drawStroke){ ctx.strokeText(line, alignX(f.align, maxWidth), yy); }
+            else{ ctx.fillText(line, alignX(f.align, maxWidth), yy); }
           }
           function alignX(a, width){ if(a==='center') return width/2; if(a==='right') return width; return 0; }
           
@@ -997,6 +1122,82 @@
       };
       img.src = state.bg;
     });
+  }
+  
+  // Helper to generate SVG content (for batch export)
+  function generateSVGContent(scale = 1){
+    const width = state.bgNatural.w * scale;
+    const height = state.bgNatural.h * scale;
+    
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
+    svg += `<image href="${state.bg}" width="${width}" height="${height}" preserveAspectRatio="none"/>`;
+    
+    for(const f of state.fields){
+      const text = getFieldText(f);
+      const x = (f.x + 6) * scale;
+      const y = (f.y + 6) * scale;
+      const fontSize = f.fontSize * scale;
+      const lineHeight = fontSize * (f.lineHeight || 1.2);
+      
+      const words = (''+text).replace(/\r/g,'').split(/\s+/);
+      const maxWidth = (f.w - 12) * scale;
+      let lines = [];
+      let currentLine = '';
+      
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.font = `${f.italic? 'italic ':''}${f.bold? '700 ': '400 '} ${fontSize}px ${f.fontFamily}`;
+      
+      for(let i = 0; i < words.length; i++){
+        const testLine = currentLine ? currentLine + ' ' + words[i] : words[i];
+        const metrics = tempCtx.measureText(testLine);
+        if(maxWidth > 0 && metrics.width > maxWidth && i > 0){
+          lines.push(currentLine);
+          currentLine = words[i];
+        } else {
+          currentLine = testLine;
+        }
+      }
+      if(currentLine) lines.push(currentLine);
+      
+      svg += `<g>`;
+      
+      if(f.strokeWidth > 0){
+        for(let i = 0; i < lines.length; i++){
+          const lineY = y + (i * lineHeight);
+          let textX = x;
+          let anchor = 'start';
+          if(f.align === 'center'){ textX = x + maxWidth/2; anchor = 'middle'; }
+          else if(f.align === 'right'){ textX = x + maxWidth; anchor = 'end'; }
+          
+          svg += `<text x="${textX}" y="${lineY}" font-family="${f.fontFamily}" font-size="${fontSize}" `;
+          svg += `fill="none" stroke="${f.strokeColor || '#000'}" stroke-width="${f.strokeWidth * scale}" `;
+          svg += `text-anchor="${anchor}" dominant-baseline="text-before-edge"`;
+          if(f.bold) svg += ` font-weight="700"`;
+          if(f.italic) svg += ` font-style="italic"`;
+          svg += `>${escapeXML(lines[i])}</text>`;
+        }
+      }
+      
+      for(let i = 0; i < lines.length; i++){
+        const lineY = y + (i * lineHeight);
+        let textX = x;
+        let anchor = 'start';
+        if(f.align === 'center'){ textX = x + maxWidth/2; anchor = 'middle'; }
+        else if(f.align === 'right'){ textX = x + maxWidth; anchor = 'end'; }
+        
+        svg += `<text x="${textX}" y="${lineY}" font-family="${f.fontFamily}" font-size="${fontSize}" `;
+        svg += `fill="${f.color || '#fff'}" text-anchor="${anchor}" dominant-baseline="text-before-edge"`;
+        if(f.bold) svg += ` font-weight="700"`;
+        if(f.italic) svg += ` font-style="italic"`;
+        svg += `>${escapeXML(lines[i])}</text>`;
+      }
+      
+      svg += `</g>`;
+    }
+    
+    svg += `</svg>`;
+    return svg;
   }
 
 
