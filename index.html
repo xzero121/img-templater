@@ -81,6 +81,12 @@
 </style>
 <!-- Bootstrap CSS (CDN) -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EPs0ZKxK6n+vJxwNf0hFQ9YB8bO9h8qfZC2I3c1l2xUu3o3Xw3Yk" crossorigin="anonymous">
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,700;1,400;1,700&family=Open+Sans:ital,wght@0,400;0,700;1,400;1,700&family=Lato:ital,wght@0,400;0,700;1,400;1,700&family=Montserrat:ital,wght@0,400;0,700;1,400;1,700&family=Oswald:wght@400;700&family=Raleway:ital,wght@0,400;0,700;1,400;1,700&family=Poppins:ital,wght@0,400;0,700;1,400;1,700&family=Merriweather:ital,wght@0,400;0,700;1,400;1,700&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&family=Noto+Sans:ital,wght@0,400;0,700;1,400;1,700&family=Nunito:ital,wght@0,400;0,700;1,400;1,700&family=Ubuntu:ital,wght@0,400;0,700;1,400;1,700&family=Quicksand:wght@400;700&family=Dancing+Script:wght@400;700&family=Pacifico&family=Lobster&family=Bebas+Neue&family=Indie+Flower&family=Shadows+Into+Light&family=Abril+Fatface&family=Righteous&family=Anton&family=Permanent+Marker&family=Cabin:ital,wght@0,400;0,700;1,400;1,700&family=Crimson+Text:ital,wght@0,400;0,700;1,400;1,700&family=Bitter:ital,wght@0,400;0,700;1,400;1,700&family=Arvo:ital,wght@0,400;0,700;1,400;1,700&family=Great+Vibes&family=Satisfy&family=Amatic+SC:wght@400;700&family=Caveat:wght@400;700&family=Courgette&family=Kaushan+Script&family=Parisienne&family=Architects+Daughter&family=Handlee&family=Patrick+Hand&display=swap" rel="stylesheet">
+<!-- Web Font Loader for better font loading -->
+<script src="https://ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js"></script>
 </head>
 <body>
   <div class="sidebar" id="sidebar">
@@ -168,10 +174,12 @@
           <input type="number" id="quality" min="0" max="1" step="0.05" value="0.92" />
         </div>
       </div>
-      <div class="uirow" style="margin-top:8px">
+      <div class="uirow" style="margin-top:8px; gap:8px">
         <button class="btn primary" id="btnExport">Export Image</button>
+        <button class="btn" id="btnBatchExport" style="display:none">Batch Export</button>
       </div>
       <div class="hint" style="margin-top:6px">Drag fields where you want, update variables, export. Easy.</div>
+      <div class="hint" id="batchHint" style="margin-top:4px; display:none; color:var(--accent);">Batch mode: Export all CSV rows</div>
     </div>
   </div>
 
@@ -232,17 +240,65 @@
   const fmtSel = document.getElementById('fmt');
   const qInput = document.getElementById('quality');
     const btnClear = document.getElementById('btnClear');
+  const btnBatchExport = document.getElementById('btnBatchExport');
+  const batchHint = document.getElementById('batchHint');
 
-  // Fonts: preset list (Monotype Corsiva assumed installed)
+  // Comprehensive font list including Google Fonts
   const presetFonts = [
-    {label:'Monotype Corsiva', value:'"Monotype Corsiva", cursive'},
-    {label:'Inter', value:'Inter, system-ui, Arial'},
+    // Sans-serif fonts
     {label:'Arial', value:'Arial, Helvetica, sans-serif'},
-    {label:'Georgia', value:'Georgia, serif'},
-    {label:'Times New Roman', value:'"Times New Roman", Times, serif'},
+    {label:'Helvetica', value:'Helvetica, Arial, sans-serif'},
     {label:'Verdana', value:'Verdana, Geneva, sans-serif'},
+    {label:'Roboto', value:'"Roboto", sans-serif'},
+    {label:'Open Sans', value:'"Open Sans", sans-serif'},
+    {label:'Lato', value:'"Lato", sans-serif'},
+    {label:'Montserrat', value:'"Montserrat", sans-serif'},
+    {label:'Oswald', value:'"Oswald", sans-serif'},
+    {label:'Raleway', value:'"Raleway", sans-serif'},
+    {label:'Poppins', value:'"Poppins", sans-serif'},
+    {label:'PT Sans', value:'"PT Sans", sans-serif'},
+    {label:'Noto Sans', value:'"Noto Sans", sans-serif'},
+    {label:'Nunito', value:'"Nunito", sans-serif'},
+    {label:'Ubuntu', value:'"Ubuntu", sans-serif'},
+    {label:'Quicksand', value:'"Quicksand", sans-serif'},
+    {label:'Cabin', value:'"Cabin", sans-serif'},
+    {label:'Inter', value:'Inter, system-ui, Arial'},
     {label:'Trebuchet MS', value:'"Trebuchet MS", sans-serif'},
     {label:'Impact', value:'Impact, Charcoal, sans-serif'},
+    {label:'Bebas Neue', value:'"Bebas Neue", cursive'},
+    {label:'Righteous', value:'"Righteous", cursive'},
+    {label:'Anton', value:'"Anton", sans-serif'},
+    
+    // Serif fonts
+    {label:'Georgia', value:'Georgia, serif'},
+    {label:'Times New Roman', value:'"Times New Roman", Times, serif'},
+    {label:'Merriweather', value:'"Merriweather", serif'},
+    {label:'Playfair Display', value:'"Playfair Display", serif'},
+    {label:'Crimson Text', value:'"Crimson Text", serif'},
+    {label:'Bitter', value:'"Bitter", serif'},
+    {label:'Arvo', value:'"Arvo", serif'},
+    {label:'Abril Fatface', value:'"Abril Fatface", cursive'},
+    
+    // Cursive & Handwriting fonts
+    {label:'Monotype Corsiva', value:'"Monotype Corsiva", cursive'},
+    {label:'Dancing Script', value:'"Dancing Script", cursive'},
+    {label:'Pacifico', value:'"Pacifico", cursive'},
+    {label:'Lobster', value:'"Lobster", cursive'},
+    {label:'Indie Flower', value:'"Indie Flower", cursive'},
+    {label:'Shadows Into Light', value:'"Shadows Into Light", cursive'},
+    {label:'Permanent Marker', value:'"Permanent Marker", cursive'},
+    {label:'Great Vibes', value:'"Great Vibes", cursive'},
+    {label:'Satisfy', value:'"Satisfy", cursive'},
+    {label:'Amatic SC', value:'"Amatic SC", cursive'},
+    {label:'Caveat', value:'"Caveat", cursive'},
+    {label:'Courgette', value:'"Courgette", cursive'},
+    {label:'Kaushan Script', value:'"Kaushan Script", cursive'},
+    {label:'Parisienne', value:'"Parisienne", cursive'},
+    {label:'Architects Daughter', value:'"Architects Daughter", cursive'},
+    {label:'Handlee', value:'"Handlee", cursive'},
+    {label:'Patrick Hand', value:'"Patrick Hand", cursive'},
+    
+    // Monospace fonts
     {label:'Courier New', value:'"Courier New", Courier, monospace'}
   ];
 
@@ -253,8 +309,29 @@
     variables: { title:"", subtitle:"", price:"", notes:"" },
     fields: [],
     selectedId: null,
-    snapElements: false
+    snapElements: false,
+    csvData: [] // Store all CSV rows for batch export
   };
+
+  // Load Google Fonts dynamically using Web Font Loader
+  if(typeof WebFont !== 'undefined'){
+    WebFont.load({
+      google: {
+        families: [
+          'Roboto:400,700', 'Open Sans:400,700', 'Lato:400,700', 'Montserrat:400,700',
+          'Oswald:400,700', 'Raleway:400,700', 'Poppins:400,700', 'Merriweather:400,700',
+          'Playfair Display:400,700', 'PT Sans:400,700', 'Noto Sans:400,700', 'Nunito:400,700',
+          'Ubuntu:400,700', 'Quicksand:400,700', 'Dancing Script:400,700', 'Pacifico',
+          'Lobster', 'Bebas Neue', 'Indie Flower', 'Shadows Into Light', 'Abril Fatface',
+          'Righteous', 'Anton', 'Permanent Marker', 'Cabin:400,700', 'Crimson Text:400,700',
+          'Bitter:400,700', 'Arvo:400,700', 'Great Vibes', 'Satisfy', 'Amatic SC:400,700',
+          'Caveat:400,700', 'Courgette', 'Kaushan Script', 'Parisienne', 'Architects Daughter',
+          'Handlee', 'Patrick Hand'
+        ]
+      }
+    });
+  }
+
 
   function el(tag, attrs={}, ...kids){
     const n = document.createElement(tag);
@@ -353,20 +430,45 @@
       };
       
       const headers = parseCSVLine(lines[0]);
-      const values = parseCSVLine(lines[1]);
       
-      // Update variables
-      headers.forEach((key, idx) => {
-        const k = key.trim();
-        if(k && idx < values.length){
-          state.variables[k] = values[idx] || '';
+      // Parse all data rows for batch export
+      const allData = [];
+      for(let i = 1; i < lines.length; i++){
+        const rowValues = parseCSVLine(lines[i]);
+        if(rowValues.length > 0){
+          const rowData = {};
+          headers.forEach((key, idx) => {
+            const k = key.trim();
+            if(k && idx < rowValues.length){
+              rowData[k] = rowValues[idx] || '';
+            }
+          });
+          allData.push(rowData);
         }
-      });
+      }
+      
+      // Store all rows for batch export
+      state.csvData = allData;
+      
+      // Update variables with first row for preview
+      if(allData.length > 0){
+        state.variables = {...state.variables, ...allData[0]};
+      }
       
       refreshVarList();
       refreshOverlays();
       updateStatus();
       csvFile.value = ''; // reset input
+      
+      // Show batch export option if multiple rows
+      if(allData.length > 1){
+        btnBatchExport.style.display = 'inline-block';
+        batchHint.style.display = 'block';
+        alert(`Loaded ${allData.length} rows from CSV. Use "Batch Export" to generate images for all rows.`);
+      } else {
+        btnBatchExport.style.display = 'none';
+        batchHint.style.display = 'none';
+      }
     };
     reader.readAsText(file);
   });
@@ -784,6 +886,119 @@
   btnExport.addEventListener('click', ()=>{
     exportImage(fmtSel.value, parseFloat(qInput.value)||0.92);
   });
+
+  // Batch export for CSV data
+  btnBatchExport.addEventListener('click', async ()=>{
+    if(!state.bg){ alert('Load a background image first.'); return; }
+    if(state.csvData.length === 0){ alert('No CSV data loaded.'); return; }
+    
+    const format = fmtSel.value;
+    const quality = parseFloat(qInput.value)||0.92;
+    const totalRows = state.csvData.length;
+    
+    if(!confirm(`Export ${totalRows} images? This may take a moment.`)) return;
+    
+    btnBatchExport.disabled = true;
+    btnBatchExport.textContent = 'Exporting...';
+    
+    // Use JSZip for batch downloads if available, otherwise download individually
+    const images = [];
+    
+    for(let i = 0; i < totalRows; i++){
+      const rowData = state.csvData[i];
+      
+      // Temporarily update variables
+      const originalVars = {...state.variables};
+      state.variables = {...state.variables, ...rowData};
+      
+      // Generate image
+      const dataURL = await generateImageDataURL(format, quality);
+      
+      // Store for download
+      images.push({
+        name: `flyer-${i+1}.${format.toLowerCase()}`,
+        data: dataURL
+      });
+      
+      // Restore original variables
+      state.variables = originalVars;
+      
+      // Update progress
+      btnBatchExport.textContent = `Exporting ${i+1}/${totalRows}...`;
+    }
+    
+    // Download all images
+    for(const img of images){
+      const a = document.createElement('a');
+      a.href = img.data;
+      a.download = img.name;
+      a.click();
+      await new Promise(resolve => setTimeout(resolve, 100)); // Small delay between downloads
+    }
+    
+    btnBatchExport.disabled = false;
+    btnBatchExport.textContent = 'Batch Export';
+    refreshOverlays(); // Restore display
+    alert(`Successfully exported ${totalRows} images!`);
+  });
+  
+  // Helper function to generate image as data URL
+  function generateImageDataURL(type, quality){
+    return new Promise((resolve) => {
+      const cvs = document.createElement('canvas');
+      cvs.width = state.bgNatural.w; cvs.height = state.bgNatural.h;
+      const ctx = cvs.getContext('2d');
+      
+      const img = new Image();
+      img.onload = ()=>{
+        ctx.drawImage(img, 0, 0);
+        
+        // Draw each field with current variables
+        for(const f of state.fields){
+          const text = getFieldText(f);
+          ctx.save();
+          ctx.translate(f.x + 6, f.y + 6);
+          
+          ctx.font = `${f.italic? 'italic ':''}${f.bold? '700 ': '400 '} ${f.fontSize}px ${f.fontFamily}`;
+          ctx.textBaseline = 'top';
+          ctx.fillStyle = f.color || '#fff';
+          ctx.lineWidth = f.strokeWidth || 0;
+          if(f.strokeWidth>0){ ctx.strokeStyle = f.strokeColor || '#000'; }
+          
+          ctx.textAlign = (f.align==='center' ? 'center' : (f.align==='right' ? 'right' : 'left'));
+          ctx.letterSpacing = f.letterSpacing || 0;
+          
+          const drawWrapped = (drawStroke=false)=>{
+            const txt = (''+text).replace(/\r/g,'');
+            const words = txt.split(/\s+/);
+            let line=''; let yy=0; const lh = f.fontSize * (f.lineHeight||1.2);
+            for(let i=0;i<words.length;i++){
+              const t = line ? line+" "+words[i] : words[i];
+              const w = ctx.measureText(t).width;
+              if((f.w-12)>0 && w>(f.w-12) && i>0){
+                if(drawStroke){ ctx.strokeText(line, alignX(f.align, f.w-12), yy); }
+                else { ctx.fillText(line, alignX(f.align, f.w-12), yy); }
+                line=words[i]; yy += lh;
+              } else { line = t; }
+            }
+            if(drawStroke){ ctx.strokeText(line, alignX(f.align, f.w-12), yy); }
+            else{ ctx.fillText(line, alignX(f.align, f.w-12), yy); }
+          }
+          function alignX(a, width){ if(a==='center') return width/2; if(a==='right') return width; return 0; }
+          
+          if(f.strokeWidth>0){ drawWrapped(true); }
+          drawWrapped(false);
+          
+          ctx.restore();
+        }
+        
+        const mime = type==='JPEG' ? 'image/jpeg' : (type==='WebP' ? 'image/webp' : 'image/png');
+        resolve(cvs.toDataURL(mime, quality));
+      };
+      img.src = state.bg;
+    });
+  }
+
 
   // Selection-aware UI enabling/disabling and handlers
   function updateSelectionUI(){
