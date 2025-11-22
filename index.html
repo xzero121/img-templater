@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Flyer Variable Mapper — Single File</title>
+<style>
+  :root{
+    --bg:#0f172a;      /* slate-900 */
+    --panel:#111827;   /* gray-900 */
+    --muted:#1f2937;   /* gray-800 */
+    --text:#e5e7eb;    /* gray-200 */
+    --accent:#22c55e;  /* green-500 */
+    --accent-2:#60a5fa;/* blue-400 */
+    --danger:#ef4444;  /* red-500 */
+    --warn:#f59e0b;    /* amber-500 */
+    --shadow: 0 10px 30px rgba(0,0,0,.45);
+  }
+  html,body{height:100%;}
+  body{
+    margin:0; background:linear-gradient(180deg,var(--bg),#0b1224 60%); color:var(--text);
+    font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    display:flex; min-height:100vh; overflow:hidden;
+  }
+  /* Layout */
+  .sidebar{width:340px; max-width:40vw; background:var(--panel); border-right:1px solid #0008; padding:14px; overflow:auto}
+  .main{flex:1; display:flex; flex-direction:column;}
+  header{display:flex; gap:10px; align-items:center; padding:10px 12px; border-bottom:1px solid #0008; background:#0b1328; position:sticky; top:0; z-index:5}
+  header h1{font-size:16px; margin:0; font-weight:600; letter-spacing:.2px}
+  header .spacer{flex:1}
+  header .btn{margin-left:6px}
+
+  .canvas-wrap{position:relative; flex:1; display:flex; justify-content:center; align-items:center; overflow:auto; padding:18px}
+  #stage{position:relative; box-shadow:var(--shadow); background:#0a0f1f; outline:1px solid #000a; overflow:visible}
+  #bgImg{position:absolute; top:0; left:0; width:100%; height:100%; object-fit:contain; display:block; z-index:0; pointer-events:none}
+
+  /* Draggables */
+  .overlay{ z-index:10; 
+    position:absolute; border:1px dashed var(--accent-2); border-radius:6px; padding:6px; cursor:move;
+    user-select:none; color:var(--text); background:#00000020; backdrop-filter: blur(2px);
+  }
+  .overlay.selected{box-shadow:0 0 0 2px var(--accent-2) inset}
+  .overlay-inner{display:block; width:100%}
+  .handle{position:absolute; width:12px; height:12px; background:var(--accent-2); border:2px solid #fff8; border-radius:3px; cursor:nwse-resize}
+  .handle.br{right:-8px; bottom:-8px}
+  .rotate{display:none !important}
+
+  /* Controls */
+  h2{font-size:12px; text-transform:uppercase; letter-spacing:.12em; color:#9ca3af; margin:18px 0 6px}
+  .card{background:var(--muted); border:1px solid #0008; border-radius:12px; padding:12px; box-shadow:var(--shadow); margin-bottom:14px; overflow:visible}
+  .uirow{display:flex; gap:8px; flex-wrap:wrap}
+  label{font-size:12px; color:#a3a3a3; display:block; margin-bottom:4px}
+  input[type="text"], input[type="number"], select, textarea{
+    width:100%; padding:7px 9px; border-radius:8px; border:1px solid #000a; background:#0c1326; color:var(--text);
+  }
+  textarea{min-height:72px; resize:vertical}
+  .btn{
+    background:linear-gradient(180deg, #1e293b, #0b1328); border:1px solid #000; color:var(--text);
+    padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:600; letter-spacing:.2px;
+  }
+  .btn.primary{background:linear-gradient(180deg, #16a34a, #128141); border-color:#0b5a2d}
+  .btn.warn{background:linear-gradient(180deg, #f59e0b, #c97b00); border-color:#7a4a00}
+  .btn.danger{background:linear-gradient(180deg, #ef4444, #b02424); border-color:#5e1313}
+  .btn.ghost{background:transparent; border:1px dashed #ffffff33}
+  .btn:disabled{opacity:.5; cursor:not-allowed}
+  .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}
+  .grid-toggle{display:none}
+  /* toggles removed */
+  .hint{font-size:12px; color:#9ca3af}
+  .small{font-size:12px}
+
+  /* Stage grid */
+  .grid::before{display:none !important}
+
+  /* Footer */
+  footer{padding:8px 12px; border-top:1px solid #0008; background:#0b1328; display:flex; gap:10px; align-items:center}
+  footer .stat{font-size:12px; color:#9ca3af}
+
+  /* Hidden canvas for export */
+  canvas{background:transparent}
+</style>
+<!-- Bootstrap CSS (CDN) -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EPs0ZKxK6n+vJxwNf0hFQ9YB8bO9h8qfZC2I3c1l2xUu3o3Xw3Yk" crossorigin="anonymous">
+</head>
+<body>
+  <div class="sidebar" id="sidebar">
+    <div class="card">
+      <div class="uirow" style="align-items:center; justify-content:space-between;">
+        <div>
+          <h2>Background</h2>
+          <div class="hint">Upload your flyer image</div>
+        </div>
+        <button class="btn ghost" id="btnClear">Clear</button>
+      </div>
+      <div class="uirow" style="align-items:end">
+        <div style="flex:1">
+          <label>Choose image</label>
+          <input type="file" id="bgFile" accept="image/*" />
+        </div>
+        <div style="width:120px">
+          <label>Scale (%)</label>
+          <input type="number" id="bgScale" min="10" max="400" step="1" value="100" />
+        </div>
+      </div>
+      <div class="uirow" style="margin-top:8px; gap:8px">
+        <button class="btn" id="btnFit">Fit to screen</button>
+        <button class="btn" id="btnSnapElements">Snap to elements: Off</button>
+      </div>
+      </div>
+
+    <div class="card" id="varsCard">
+      <h2>Variables</h2>
+      <div class="hint">Add keys and values. Bind them to fields on the image.</div>
+      <div id="vars"></div>
+      <div class="uirow" style="margin-top:8px">
+        <input id="newVarKey" placeholder="e.g., title" />
+        <button class="btn" id="addVar">Add</button>
+      </div>
+    </div>
+
+    <div class="card"><h2>Fields</h2>
+      <div class="uirow" style="margin-bottom:6px">
+        <select id="varSelect"></select>
+        <button class="btn" id="addField">+ Text Field</button>
+      </div>
+      <!-- Global align/center controls -->
+      <div class="uirow" style="gap:6px; margin-bottom:8px">
+        <button class="btn" id="btnAlignLeft">Align Left</button>
+        <button class="btn" id="btnAlignCenter">Align Center</button>
+        <button class="btn" id="btnAlignRight">Align Right</button>
+      </div>
+      <div class="uirow" style="gap:6px; margin-bottom:10px">
+        <button class="btn" id="btnCenterHorizontal">Center Horizontal</button>
+        <button class="btn" id="btnCenterVertical">Center Vertical</button>
+      </div>
+      <div id="fieldInspector">
+        <div class="hint">Select a field on the canvas to edit its properties.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Template</h2>
+      <div class="uirow">
+        <button class="btn" id="btnSaveJson">Save JSON</button>
+        <input type="file" id="loadJson" accept="application/json" />
+      </div>
+      <div class="hint" style="margin-top:6px">Templates store variables + field positions/styles.</div>
+    </div>
+
+    <div class="card">
+      <h2>Export</h2>
+      <div class="uirow" style="align-items:end">
+        <div style="flex:1">
+          <label>Format</label>
+          <select id="fmt">
+            <option>PNG</option>
+            <option>JPEG</option>
+            <option>WebP</option>
+          </select>
+        </div>
+        <div style="width:120px">
+          <label>Quality</label>
+          <input type="number" id="quality" min="0" max="1" step="0.05" value="0.92" />
+        </div>
+      </div>
+      <div class="uirow" style="margin-top:8px">
+        <button class="btn primary" id="btnExport">Export Image</button>
+      </div>
+      <div class="hint" style="margin-top:6px">Drag fields where you want, update variables, export. Easy.</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <header>
+      <h1>🖨️ Flyer Variable Mapper</h1>
+      <div class="spacer"></div>
+      
+      <button class="btn warn" id="btnDuplicate">Duplicate Field</button>
+      <button class="btn danger" id="btnDelete">Delete Field</button>
+    </header>
+    <div class="canvas-wrap">
+      <div id="stage" style="position:relative">
+        <img id="bgImg" alt="Background" />
+        <!-- overlay fields will be injected here -->
+      </div>
+    </div>
+    <footer>
+      <div class="stat" id="status">No background loaded.</div>
+    </footer>
+  </div>
+
+<script>
+(function(){
+  const bgFile = document.getElementById('bgFile');
+  const bgImg = document.getElementById('bgImg');
+  const stage = document.getElementById('stage');
+  const status = document.getElementById('status');
+  const bgScale = document.getElementById('bgScale');
+  const btnFit = document.getElementById('btnFit');
+  // grid/snapping vars removed
+
+  const varsDiv = document.getElementById('vars');
+  const newVarKey = document.getElementById('newVarKey');
+  const addVarBtn = document.getElementById('addVar');
+  const varSelect = document.getElementById('varSelect');
+
+  const addFieldBtn = document.getElementById('addField');
+  const btnDuplicate = document.getElementById('btnDuplicate');
+  const btnDelete = document.getElementById('btnDelete');
+  // Global align/center buttons
+  const btnAlignLeft = document.getElementById('btnAlignLeft');
+  const btnAlignCenter = document.getElementById('btnAlignCenter');
+  const btnAlignRight = document.getElementById('btnAlignRight');
+  const btnCenterHorizontal = document.getElementById('btnCenterHorizontal');
+  const btnCenterVertical = document.getElementById('btnCenterVertical');
+  const btnSnapElements = document.getElementById('btnSnapElements');
+  
+  
+
+  const fieldInspector = document.getElementById('fieldInspector');
+
+  const btnSaveJson = document.getElementById('btnSaveJson');
+  const loadJson = document.getElementById('loadJson');
+
+  const btnExport = document.getElementById('btnExport');
+  const fmtSel = document.getElementById('fmt');
+  const qInput = document.getElementById('quality');
+    const btnClear = document.getElementById('btnClear');
+
+  // Fonts: preset list (Monotype Corsiva assumed installed)
+  const presetFonts = [
+    {label:'Monotype Corsiva', value:'"Monotype Corsiva", cursive'},
+    {label:'Inter', value:'Inter, system-ui, Arial'},
+    {label:'Arial', value:'Arial, Helvetica, sans-serif'},
+    {label:'Georgia', value:'Georgia, serif'},
+    {label:'Times New Roman', value:'"Times New Roman", Times, serif'},
+    {label:'Verdana', value:'Verdana, Geneva, sans-serif'},
+    {label:'Trebuchet MS', value:'"Trebuchet MS", sans-serif'},
+    {label:'Impact', value:'Impact, Charcoal, sans-serif'},
+    {label:'Courier New', value:'"Courier New", Courier, monospace'}
+  ];
+
+  let state = {
+    bg: null,
+    bgNatural: {w:0, h:0},
+    scale: 1,
+    variables: { title:"", subtitle:"", price:"", notes:"" },
+    fields: [],
+    selectedId: null,
+    snapElements: false
+  };
+
+  function el(tag, attrs={}, ...kids){
+    const n = document.createElement(tag);
+    for (const [k,v] of Object.entries(attrs)){
+      if(k==='class') n.className=v; else if(k==='style') n.style.cssText=v; else if(k.startsWith('on')) n.addEventListener(k.slice(2), v); else n.setAttribute(k,v);
+    }
+    for (const k of kids){ if(k==null) continue; if(typeof k === 'string') n.appendChild(document.createTextNode(k)); else n.appendChild(k); }
+    return n;
+  }
+
+  function updateStatus(){
+    const f = state.fields.length;
+    const v = Object.keys(state.variables).length;
+    const bg = state.bg ? `${state.bgNatural.w}×${state.bgNatural.h}` : 'none';
+    status.textContent = `Background: ${bg} • Variables: ${v} • Fields: ${f}`;
+  }
+
+  function refreshVarList(){
+    varsDiv.innerHTML = '';
+    varSelect.innerHTML = '';
+    for (const [k,val] of Object.entries(state.variables)){
+      // For list
+      const row = el('div', {class:'uirow', style:'align-items:center; margin-bottom:6px'},
+        el('input', {value:k, disabled:true, class:'mono', style:'width:120px;'}),
+        el('input', {value:val, style:'flex:1; min-width:0;', oninput:(e)=>{ state.variables[k]=e.target.value; refreshOverlays(); }}),
+        el('button', {class:'btn danger', onclick:()=>{ delete state.variables[k]; // remove fields bound to this
+          state.fields = state.fields.filter(f=>f.varKey!==k);
+          state.selectedId=null; renderOverlays(); refreshVarList(); updateStatus(); }}, '×'),
+      );
+      varsDiv.appendChild(row);
+      // For select
+      varSelect.appendChild(el('option', {}, k));
+    }
+  }
+
+  addVarBtn.addEventListener('click', ()=>{
+    const key = (newVarKey.value||'').trim();
+    if(!key) return;
+    if(state.variables[key]){ alert('Variable already exists.'); return; }
+    state.variables[key]=""; newVarKey.value=''; refreshVarList();
+  });
+
+  // Background loading
+  bgFile.addEventListener('change', async (e)=>{
+    const file = e.target.files[0]; if(!file) return;
+    const reader = new FileReader(); reader.onload = () => setBackground(reader.result);
+    reader.readAsDataURL(file);
+  });
+
+  function setBackground(dataURL){
+    state.bg = dataURL;
+    bgImg.src = dataURL;
+    bgImg.onload = ()=>{
+      state.bgNatural = {w:bgImg.naturalWidth, h:bgImg.naturalHeight};
+      state.scale = 1; bgScale.value=100; applyScale(); updateStatus();
+    }
+  }
+
+  function applyScale(){
+    const s = Math.max(0.1, Math.min(4, parseFloat(bgScale.value)/100 || 1));
+    state.scale = s;
+    stage.style.width = (state.bgNatural.w * s) + 'px';
+    stage.style.height = (state.bgNatural.h * s) + 'px';
+    renderOverlays();
+  }
+
+  bgScale.addEventListener('input', applyScale);
+  applyScale();
+
+  btnFit.addEventListener('click', ()=>{
+    if(!state.bgNatural.w) return;
+    const wrap = stage.parentElement.getBoundingClientRect();
+    const margin = 40; // padding room
+    const sx = (wrap.width - margin) / state.bgNatural.w;
+    const sy = (wrap.height - margin) / state.bgNatural.h;
+    const s = Math.max(0.1, Math.min(4, Math.min(sx, sy)));
+    state.scale = s; bgScale.value = Math.round(s*100); applyScale();
+  });
+
+  btnClear.addEventListener('click', ()=>{
+    state.bg=null; state.bgNatural={w:0,h:0}; bgImg.src=''; updateStatus();
+  });
+
+  // Field overlays
+  function renderOverlays(){
+    // remove all existing overlays
+    stage.querySelectorAll('.overlay').forEach(n=>n.remove());
+    for (const f of state.fields){
+      const o = createOverlayElement(f);
+      stage.appendChild(o);
+    }
+    refreshInspector();
+    updateSelectionUI();
+    updateStatus();
+  }
+
+  function refreshOverlays(){
+    for (const o of stage.querySelectorAll('.overlay')){
+      const id = o.dataset.id;
+      const f = state.fields.find(x=>x.id===id);
+      if(!f) continue;
+      const text = state.variables[f.varKey] ?? '';
+      const inner = o.querySelector('.overlay-inner');
+      inner.textContent = text;
+      inner.style.fontFamily = f.fontFamily;
+      inner.style.fontWeight = f.bold? '700':'400';
+      inner.style.fontStyle = f.italic? 'italic':'normal';
+      inner.style.fontSize = (f.fontSize*state.scale)+'px';
+      inner.style.color = f.color;
+      inner.style.textAlign = f.align;
+      inner.style.letterSpacing = f.letterSpacing+'px';
+      inner.style.lineHeight = f.lineHeight;
+      inner.style.whiteSpace = 'pre-wrap';
+      inner.style.wordBreak = 'break-word';
+      o.style.transform = `translate(${f.x*state.scale}px, ${f.y*state.scale}px)`;
+      o.style.width = (f.w*state.scale)+'px';
+      o.classList.toggle('selected', state.selectedId===f.id);
+    }
+    updateSelectionUI();
+  }
+
+  function createOverlayElement(f){
+    const o = el('div', {class:'overlay', 'data-id':f.id});
+    const inner = el('div', {class:'overlay-inner'});
+    const handle = el('div', {class:'handle br'});
+    const rot = el('div', {class:'rotate'});
+    o.appendChild(inner); o.appendChild(handle);
+
+    // Initial styles
+    inner.textContent = state.variables[f.varKey] ?? '';
+    o.style.transform = `translate(${f.x*state.scale}px, ${f.y*state.scale}px)`;
+    o.style.width = (f.w*state.scale)+'px';
+
+    // Selection
+    o.addEventListener('pointerdown', (e)=>{
+      state.selectedId = f.id; refreshOverlays(); refreshInspector(); updateSelectionUI();
+    });
+
+    // Drag move
+    let dragging=false, startX=0, startY=0, baseX=0, baseY=0;
+    o.addEventListener('pointerdown', (e)=>{
+      if(e.target===handle || e.target===rot) return; // handled elsewhere
+      dragging=true; startX=e.clientX; startY=e.clientY; baseX=f.x; baseY=f.y; o.setPointerCapture(e.pointerId);
+    });
+    o.addEventListener('pointermove', (e)=>{
+      if(!dragging) return; const dx=(e.clientX-startX)/state.scale; const dy=(e.clientY-startY)/state.scale;
+      let nx=baseX+dx, ny=baseY+dy;
+      if(state.snapElements){ [nx,ny] = snapToElements(nx,ny,f); }
+      f.x = Math.max(0, Math.min(state.bgNatural.w, nx));
+      f.y = Math.max(0, Math.min(state.bgNatural.h, ny));
+      refreshOverlays();
+    });
+    o.addEventListener('pointerup', (e)=>{ dragging=false; });
+
+    // Resize
+    let resizing=false, startRX=0, baseW=0;
+    handle.addEventListener('pointerdown', (e)=>{
+      e.stopPropagation(); resizing=true; startRX=e.clientX; baseW=f.w; handle.setPointerCapture(e.pointerId);
+    });
+    handle.addEventListener('pointermove', (e)=>{
+      if(!resizing) return; const dx=(e.clientX-startRX)/state.scale; let nw=Math.max(20, baseW+dx);
+      
+      f.w = nw; refreshOverlays();
+    });
+    handle.addEventListener('pointerup', ()=>{ resizing=false; });
+
+    
+
+    return o;
+  }
+
+  function estimateHeight(f){
+    const o = getOverlayForField(f);
+    if(o){ const h = (o.offsetHeight||0) / (state.scale||1); if(h>0) return h; }
+    return f.fontSize * (f.lineHeight||1.2);
+  }
+  function snapToElements(nx, ny, f){
+    const thresh = 6 / (state.scale||1);
+    const w = f.w, h = estimateHeight(f);
+    const targetsX = [];
+    const targetsY = [];
+    for(const g of state.fields){ if(g.id===f.id) continue;
+      const gx = g.x, gy = g.y, gw = g.w, gh = estimateHeight(g);
+      targetsX.push(gx, gx+gw/2, gx+gw);
+      targetsY.push(gy, gy+gh/2, gy+gh);
+    }
+    const myX = [nx, nx+w/2, nx+w];
+    const myY = [ny, ny+h/2, ny+h];
+    let bestDx=null, bestDy=null, bestAbsX=thresh+1, bestAbsY=thresh+1;
+    for(const tx of targetsX){ for(const mx of myX){ const d = tx-mx; const ad = Math.abs(d); if(ad<bestAbsX && ad<=thresh){ bestAbsX=ad; bestDx=d; } } }
+    for(const ty of targetsY){ for(const my of myY){ const d = ty-my; const ad = Math.abs(d); if(ad<bestAbsY && ad<=thresh){ bestAbsY=ad; bestDy=d; } } }
+    if(bestDx!=null) nx += bestDx;
+    if(bestDy!=null) ny += bestDy;
+    return [nx, ny];
+  }
+
+  function addField(varKey){
+    if(!varKey){ alert('Create a variable first.'); return; }
+    const id = 'f_'+Math.random().toString(36).slice(2,9);
+    const f = { id, type:'text', varKey, x:40, y:40, w:220, align:'left', fontFamily:'"Monotype Corsiva", cursive',
+      fontSize:28, bold:false, italic:false, color:'#ffffff', strokeColor:'#000000', strokeWidth:0, letterSpacing:0, lineHeight:1.2, rotation:0 };
+    state.fields.push(f); state.selectedId=id; renderOverlays();
+  }
+
+  addFieldBtn.addEventListener('click', ()=> addField(varSelect.value));
+
+  btnDuplicate.addEventListener('click', ()=>{
+    const f = currentField(); if(!f) return;
+    const clone = JSON.parse(JSON.stringify(f)); clone.id='f_'+Math.random().toString(36).slice(2,9); clone.x += 15; clone.y += 15; state.fields.push(clone); state.selectedId=clone.id; renderOverlays();
+  });
+  btnDelete.addEventListener('click', ()=>{
+    const id = state.selectedId; if(!id) return; state.fields = state.fields.filter(x=>x.id!==id); state.selectedId=null; renderOverlays();
+  });
+
+  function currentField(){ return state.fields.find(f=>f.id===state.selectedId) || null; }
+
+  // Helpers to center fields
+  function getOverlayForField(f){ return stage.querySelector('.overlay[data-id="'+f.id+'"]'); }
+  function clampField(f){
+    const W = state.bgNatural.w, H = state.bgNatural.h;
+    const o = getOverlayForField(f);
+    const ow = Math.max(1, f.w);
+    let oh = 0;
+    if(o){ oh = (o.offsetHeight||0) / (state.scale||1); }
+    if(!oh){ const lh = f.fontSize * (f.lineHeight||1.2); oh = lh; }
+    f.x = Math.max(0, Math.min(W - ow, f.x));
+    f.y = Math.max(0, Math.min(H - oh, f.y));
+  }
+  function getOverlayForField(f){ return stage.querySelector('.overlay[data-id="'+f.id+'"]'); }
+  function centerField(f, which){
+    if(!state.bgNatural.w) return;
+    const o = getOverlayForField(f);
+    let ow = f.w;
+    let oh = 0;
+    if(o){ oh = (o.offsetHeight||0) / (state.scale||1); }
+    if(!oh){
+      const tmp = document.createElement('canvas').getContext('2d');
+      tmp.font = (f.italic? 'italic ' : '') + (f.bold? '700 ' : '400 ') + ' ' + f.fontSize + 'px ' + f.fontFamily;
+      const words = String(state.variables[f.varKey]||'').split(/\s+/);
+      let line='', lines=1; const lh = f.fontSize * (f.lineHeight||1.2);
+      for(let i=0;i<words.length;i++){
+        const t = line? line + ' ' + words[i] : words[i];
+        if(tmp.measureText(t).width > f.w && i>0){ line=words[i]; lines++; } else { line=t; }
+      }
+      oh = Math.max(lh, lines*lh);
+    }
+    if(which==='x' || which==='both'){ f.x = Math.max(0, (state.bgNatural.w - ow)/2); }
+    if(which==='y' || which==='both'){ f.y = Math.max(0, (state.bgNatural.h - oh)/2); }
+    refreshOverlays(); refreshInspector();
+  }
+
+  function inspectorControl(labelText, inputEl){
+    const wrap = el('div', {class:'uirow', style:'align-items:end; margin-bottom:6px'},
+      el('div', {style:'flex:1'}, el('label', {}, labelText), inputEl)
+    );
+    return wrap;
+  }
+
+  function refreshInspector(){
+    fieldInspector.innerHTML = '';
+    const f = currentField();
+    if(!f){ fieldInspector.appendChild(el('div', {class:'hint'}, 'No field selected. Click a field to edit.')); return; }
+
+    // Variable binding
+    const varSel = el('select', {onchange:(e)=>{ f.varKey=e.target.value; refreshOverlays(); }}, ...Object.keys(state.variables).map(k=>{
+      const opt = el('option', {value:k}, k); if(k===f.varKey) opt.selected=true; return opt; }));
+    fieldInspector.appendChild(inspectorControl('Variable', varSel));
+
+    // Font family (dropdown)
+    const famSel = (function(){
+      const opts = [];
+      // ensure current font is present as an option if it's custom
+      const hasCurrent = presetFonts.some(p=>p.value===f.fontFamily);
+      if(!hasCurrent && f.fontFamily){ opts.push(el('option',{value:f.fontFamily, selected:true}, `${f.fontFamily} (custom)`)); }
+      for(const p of presetFonts){
+        const o = el('option', {value:p.value}, p.label);
+        if(p.value===f.fontFamily && !hasCurrent) { /* already added custom */ }
+        else if(p.value===f.fontFamily) o.selected = true;
+        opts.push(o);
+      }
+      const sel = el('select', {onchange:(e)=>{ f.fontFamily = e.target.value; refreshOverlays(); }}, ...opts);
+      return sel;
+    })();
+    fieldInspector.appendChild(inspectorControl('Font family', famSel));
+
+    // Size / Weight / Italic
+    const size = el('input', {type:'number', value:f.fontSize, min:'6', max:'300', step:'1', oninput:(e)=>{ f.fontSize=parseFloat(e.target.value)||12; refreshOverlays(); }});
+    const weight = el('select', {onchange:(e)=>{ f.bold=(e.target.value==='bold'); refreshOverlays(); }}, el('option', {value:'normal', selected:!f.bold}, 'Regular'), el('option', {value:'bold', selected:f.bold}, 'Bold'));
+    const italic = el('select', {onchange:(e)=>{ f.italic=(e.target.value==='italic'); refreshOverlays(); }}, el('option', {value:'normal', selected:!f.italic}, 'Upright'), el('option', {value:'italic', selected:f.italic}, 'Italic'));
+    const row1 = el('div', {class:'uirow'}, inspectorControl('Font size', size), inspectorControl('Weight', weight), inspectorControl('Style', italic));
+    fieldInspector.appendChild(row1);
+
+    // Color / Stroke
+    const color = el('input', {type:'color', value:f.color, oninput:(e)=>{ f.color=e.target.value; refreshOverlays(); }});
+    const sCol = el('input', {type:'color', value:f.strokeColor, oninput:(e)=>{ f.strokeColor=e.target.value; refreshOverlays(); }});
+    const sWid = el('input', {type:'number', value:f.strokeWidth, min:'0', max:'10', step:'0.5', oninput:(e)=>{ f.strokeWidth=parseFloat(e.target.value)||0; refreshOverlays(); }});
+    const row2 = el('div', {class:'uirow'}, inspectorControl('Color', color), inspectorControl('Outline color', sCol), inspectorControl('Outline width', sWid));
+    fieldInspector.appendChild(row2);
+
+    // Align / Letter spacing / Line height
+    const align = el('select', {onchange:(e)=>{ f.align=e.target.value; refreshOverlays(); }}, ['left','center','right'].map(a=>{ const o=el('option',{value:a}, a); if(f.align===a)o.selected=true; return o; }));
+    const lspace = el('input', {type:'number', value:f.letterSpacing, step:'0.5', oninput:(e)=>{ f.letterSpacing=parseFloat(e.target.value)||0; refreshOverlays(); }});
+    const lheight = el('input', {type:'number', value:f.lineHeight, step:'0.05', oninput:(e)=>{ f.lineHeight=parseFloat(e.target.value)||1.2; refreshOverlays(); }});
+    const row3 = el('div', {class:'uirow'}, inspectorControl('Align', align), inspectorControl('Letter spacing', lspace), inspectorControl('Line height', lheight));
+    fieldInspector.appendChild(row3);
+
+    // Geometry
+    const x = el('input', {type:'number', value:f.x, step:'1', oninput:(e)=>{ f.x=parseFloat(e.target.value)||0; refreshOverlays(); }});
+    const y = el('input', {type:'number', value:f.y, step:'1', oninput:(e)=>{ f.y=parseFloat(e.target.value)||0; refreshOverlays(); }});
+    const w = el('input', {type:'number', value:f.w, step:'1', oninput:(e)=>{ f.w=Math.max(20, parseFloat(e.target.value)||100); refreshOverlays(); }});
+    const row4 = el('div', {class:'uirow'}, inspectorControl('X', x), inspectorControl('Y', y), inspectorControl('Width', w));
+    fieldInspector.appendChild(row4);
+
+    // Quick align & center controls
+    const alignBtns = el('div', {class:'uirow'},
+      (function(){ const b = el('button',{class:'btn'},'Left'); b.onclick=()=>{ f.align='left'; refreshOverlays(); refreshInspector(); }; return b; })(),
+      (function(){ const b = el('button',{class:'btn'},'Center'); b.onclick=()=>{ f.align='center'; refreshOverlays(); refreshInspector(); }; return b; })(),
+      (function(){ const b = el('button',{class:'btn'},'Right'); b.onclick=()=>{ f.align='right'; refreshOverlays(); refreshInspector(); }; return b; })()
+    );
+    fieldInspector.appendChild(inspectorControl('Text align (quick)', alignBtns));
+
+    const centerBtns = el('div', {class:'uirow'},
+      (function(){ const b = el('button',{class:'btn'},'Center X'); b.onclick=()=>centerField(f,'x'); return b; })(),
+      (function(){ const b = el('button',{class:'btn'},'Center Y'); b.onclick=()=>centerField(f,'y'); return b; })()
+    );
+    fieldInspector.appendChild(inspectorControl('Field position', centerBtns));
+  }
+
+  // Save / load template JSON
+  function download(filename, content){
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([content], {type:'application/json'}));
+    a.download = filename; a.click(); URL.revokeObjectURL(a.href);
+  }
+
+  btnSaveJson.addEventListener('click', ()=>{
+    const payload = JSON.stringify(state, null, 2);
+    download('flyer-template.json', payload);
+  });
+
+  loadJson.addEventListener('change', (e)=>{
+    const file = e.target.files[0]; if(!file) return; const fr = new FileReader();
+    fr.onload = ()=>{ try{
+      const cfg = JSON.parse(fr.result);
+      if(cfg.bg) setBackground(cfg.bg); else setBackground(state.bg);
+      state.variables = cfg.variables||{}; state.fields = cfg.fields||[]; state.selectedId=null; refreshVarList(); renderOverlays();
+    }catch(err){ alert('Invalid JSON'); }
+    };
+    fr.readAsText(file);
+  });
+
+  // Export render using Canvas 2D
+  function wrapText(ctx, text, x, y, maxWidth, lineHeight, align){
+    if(!text){ return 0; }
+    const words = (''+text).split(/\s+/);
+    let line = '', lines=0;
+    const drawLine = (l, yy)=>{ if(align==='center') ctx.textAlign='center'; else if(align==='right') ctx.textAlign='right'; else ctx.textAlign='left'; ctx.fillText(l, x, yy); };
+
+    for(let n=0;n<words.length;n++){
+      const testLine = line + (line? ' ':'') + words[n];
+      const metrics = ctx.measureText(testLine);
+      const w = metrics.width;
+      if(maxWidth>0 && w > maxWidth && n>0){ drawLine(line, y); line = words[n]; y += lineHeight; lines++; }
+      else { line = testLine; }
+    }
+    drawLine(line, y); lines++;
+    return lines;
+  }
+
+  function exportImage(type, quality){
+    if(!state.bg){ alert('Load a background image first.'); return; }
+    const cvs = document.createElement('canvas');
+    cvs.width = state.bgNatural.w; cvs.height = state.bgNatural.h;
+    const ctx = cvs.getContext('2d');
+
+    // Draw background
+    const img = new Image(); img.onload = ()=>{
+      ctx.drawImage(img, 0, 0);
+      // Draw each field
+      for(const f of state.fields){
+        const text = state.variables[f.varKey] ?? '';
+        ctx.save();
+        ctx.translate(f.x + 6, f.y + 6 + ((f.fontSize * (f.lineHeight||1.2) - f.fontSize)/2));
+        
+        ctx.font = `${f.italic? 'italic ':''}${f.bold? '700 ': '400 '} ${f.fontSize}px ${f.fontFamily}`;
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = f.color || '#fff';
+        ctx.lineWidth = f.strokeWidth || 0;
+        if(f.strokeWidth>0){ ctx.strokeStyle = f.strokeColor || '#000'; }
+        // handle align in wrapText by switching textAlign
+        if(f.strokeWidth>0){
+          // hacky stroke+fill by drawing twice
+          ctx.save();
+          ctx.textAlign = f.align;
+          const lines = text.split(/\n/);
+          let y=0;
+          for(let i=0;i<lines.length;i++){
+            const l = lines[i];
+            // manual wrap with measureText
+            // use hidden wrapText to count lines but strokeText per line for outline effect
+          }
+          ctx.restore();
+        }
+        // Proper wrapped draw
+        // align text like DOM overlay
+        ctx.textAlign = (f.align==='center' ? 'center' : (f.align==='right' ? 'right' : 'left'));
+        ctx.letterSpacing = f.letterSpacing || 0; // not widely supported on canvas; ignored (kept for future)
+        // Stroke first (if any), then fill. We'll implement simple wrap that draws both.
+        const drawWrapped = (drawStroke=false)=>{
+          const txt = (''+text).replace(/\r/g,'');
+          const words = txt.split(/\s+/);
+          let line=''; let yy=0; const lh = f.fontSize * (f.lineHeight||1.2);
+          for(let i=0;i<words.length;i++){
+            const t = line ? line+" "+words[i] : words[i];
+            const w = ctx.measureText(t).width;
+            if((f.w-12)>0 && w>(f.w-12) && i>0){
+              if(drawStroke){ ctx.strokeText(line, alignX(f.align, f.w-12), yy); }
+              else { ctx.fillText(line, alignX(f.align, f.w-12), yy); }
+              line=words[i]; yy += lh;
+            } else { line = t; }
+          }
+          if(drawStroke){ ctx.strokeText(line, alignX(f.align, f.w-12), yy); }
+          else{ ctx.fillText(line, alignX(f.align, f.w-12), yy); }
+        }
+        function alignX(a, width){ if(a==='center') return width/2; if(a==='right') return width; return 0; }
+
+        if(f.strokeWidth>0){ drawWrapped(true); }
+        drawWrapped(false);
+
+        ctx.restore();
+      }
+
+      const mime = type==='JPEG' ? 'image/jpeg' : (type==='WebP' ? 'image/webp' : 'image/png');
+      const dataURL = cvs.toDataURL(mime, quality);
+      const a = document.createElement('a'); a.href=dataURL; a.download = `flyer.${type.toLowerCase()}`; a.click();
+    };
+    img.src = state.bg;
+  }
+
+  btnExport.addEventListener('click', ()=>{
+    exportImage(fmtSel.value, parseFloat(qInput.value)||0.92);
+  });
+
+  // Selection-aware UI enabling/disabling and handlers
+  function updateSelectionUI(){
+    const has = !!currentField();
+    [btnAlignLeft,btnAlignCenter,btnAlignRight,btnCenterHorizontal,btnCenterVertical,btnDuplicate,btnDelete].forEach(b=>{ if(b) b.disabled = !has; });
+  }
+  if(btnAlignLeft) btnAlignLeft.onclick = ()=>{ const f=currentField(); if(!f) return; f.align='left'; refreshOverlays(); refreshInspector(); };
+  if(btnAlignCenter) btnAlignCenter.onclick = ()=>{ const f=currentField(); if(!f) return; f.align='center'; refreshOverlays(); refreshInspector(); };
+  if(btnAlignRight) btnAlignRight.onclick = ()=>{ const f=currentField(); if(!f) return; f.align='right'; refreshOverlays(); refreshInspector(); };
+  if(btnCenterHorizontal) btnCenterHorizontal.onclick = ()=>{ const f=currentField(); if(!f) return; centerField(f,'x'); clampField(f); refreshOverlays(); refreshInspector(); };
+  if(btnCenterVertical) btnCenterVertical.onclick = ()=>{ const f=currentField(); if(!f) return; centerField(f,'y'); clampField(f); refreshOverlays(); refreshInspector(); };
+  
+
+  // Snap-to-elements toggle
+  if(btnSnapElements){
+    btnSnapElements.addEventListener('click', ()=>{
+      state.snapElements = !state.snapElements;
+      btnSnapElements.textContent = 'Snap to elements: ' + (state.snapElements ? 'On' : 'Off');
+      btnSnapElements.classList.toggle('primary', state.snapElements);
+    });
+  }
+
+  // Init
+  refreshVarList(); updateStatus(); updateSelectionUI();
+})();
+</script>
+</body>
+</html>
