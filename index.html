@@ -81,6 +81,12 @@
 </style>
 <!-- Bootstrap CSS (CDN) -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EPs0ZKxK6n+vJxwNf0hFQ9YB8bO9h8qfZC2I3c1l2xUu3o3Xw3Yk" crossorigin="anonymous">
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,700;1,400;1,700&family=Open+Sans:ital,wght@0,400;0,700;1,400;1,700&family=Lato:ital,wght@0,400;0,700;1,400;1,700&family=Montserrat:ital,wght@0,400;0,700;1,400;1,700&family=Oswald:wght@400;700&family=Raleway:ital,wght@0,400;0,700;1,400;1,700&family=Poppins:ital,wght@0,400;0,700;1,400;1,700&family=Merriweather:ital,wght@0,400;0,700;1,400;1,700&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&family=Noto+Sans:ital,wght@0,400;0,700;1,400;1,700&family=Nunito:ital,wght@0,400;0,700;1,400;1,700&family=Ubuntu:ital,wght@0,400;0,700;1,400;1,700&family=Quicksand:wght@400;700&family=Dancing+Script:wght@400;700&family=Pacifico&family=Lobster&family=Bebas+Neue&family=Indie+Flower&family=Shadows+Into+Light&family=Abril+Fatface&family=Righteous&family=Anton&family=Permanent+Marker&family=Cabin:ital,wght@0,400;0,700;1,400;1,700&family=Crimson+Text:ital,wght@0,400;0,700;1,400;1,700&family=Bitter:ital,wght@0,400;0,700;1,400;1,700&family=Arvo:ital,wght@0,400;0,700;1,400;1,700&family=Great+Vibes&family=Satisfy&family=Amatic+SC:wght@400;700&family=Caveat:wght@400;700&family=Courgette&family=Kaushan+Script&family=Parisienne&family=Architects+Daughter&family=Handlee&family=Patrick+Hand&display=swap" rel="stylesheet">
+<!-- Web Font Loader for better font loading -->
+<script src="https://ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js"></script>
 </head>
 <body>
   <div class="sidebar" id="sidebar">
@@ -116,6 +122,11 @@
         <input id="newVarKey" placeholder="e.g., title" />
         <button class="btn" id="addVar">Add</button>
       </div>
+      <div class="uirow" style="margin-top:8px">
+        <label>Import from CSV</label>
+        <input type="file" id="csvFile" accept=".csv,text/csv" />
+      </div>
+      <div class="hint" style="margin-top:4px">CSV: first row = variable names, second row = values</div>
     </div>
 
     <div class="card"><h2>Fields</h2>
@@ -156,6 +167,7 @@
             <option>PNG</option>
             <option>JPEG</option>
             <option>WebP</option>
+            <option>SVG</option>
           </select>
         </div>
         <div style="width:120px">
@@ -163,10 +175,19 @@
           <input type="number" id="quality" min="0" max="1" step="0.05" value="0.92" />
         </div>
       </div>
-      <div class="uirow" style="margin-top:8px">
+      <div class="uirow" style="align-items:end; margin-top:8px">
+        <div style="flex:1">
+          <label>Output Scale</label>
+          <input type="number" id="exportScale" min="1" max="10" step="0.5" value="1" />
+        </div>
+        <div class="hint" style="flex:1; margin:0; padding-left:8px">Scale export (1x = original size)</div>
+      </div>
+      <div class="uirow" style="margin-top:8px; gap:8px">
         <button class="btn primary" id="btnExport">Export Image</button>
+        <button class="btn" id="btnBatchExport" style="display:none">Batch Export</button>
       </div>
       <div class="hint" style="margin-top:6px">Drag fields where you want, update variables, export. Easy.</div>
+      <div class="hint" id="batchHint" style="margin-top:4px; display:none; color:var(--accent);">Batch mode: Export all CSV rows</div>
     </div>
   </div>
 
@@ -203,6 +224,7 @@
   const newVarKey = document.getElementById('newVarKey');
   const addVarBtn = document.getElementById('addVar');
   const varSelect = document.getElementById('varSelect');
+  const csvFile = document.getElementById('csvFile');
 
   const addFieldBtn = document.getElementById('addField');
   const btnDuplicate = document.getElementById('btnDuplicate');
@@ -225,18 +247,71 @@
   const btnExport = document.getElementById('btnExport');
   const fmtSel = document.getElementById('fmt');
   const qInput = document.getElementById('quality');
+  const exportScaleInput = document.getElementById('exportScale');
     const btnClear = document.getElementById('btnClear');
+  const btnBatchExport = document.getElementById('btnBatchExport');
+  const batchHint = document.getElementById('batchHint');
 
-  // Fonts: preset list (Monotype Corsiva assumed installed)
+  // Comprehensive font list including Google Fonts
   const presetFonts = [
-    {label:'Monotype Corsiva', value:'"Monotype Corsiva", cursive'},
-    {label:'Inter', value:'Inter, system-ui, Arial'},
+    // Custom fonts (user requested)
+    {label:'Aprila', value:'"Aprila", cursive'},
+    {label:'Bellaboo', value:'"Bellaboo", cursive'},
+    
+    // Sans-serif fonts
     {label:'Arial', value:'Arial, Helvetica, sans-serif'},
-    {label:'Georgia', value:'Georgia, serif'},
-    {label:'Times New Roman', value:'"Times New Roman", Times, serif'},
+    {label:'Helvetica', value:'Helvetica, Arial, sans-serif'},
     {label:'Verdana', value:'Verdana, Geneva, sans-serif'},
+    {label:'Roboto', value:'"Roboto", sans-serif'},
+    {label:'Open Sans', value:'"Open Sans", sans-serif'},
+    {label:'Lato', value:'"Lato", sans-serif'},
+    {label:'Montserrat', value:'"Montserrat", sans-serif'},
+    {label:'Oswald', value:'"Oswald", sans-serif'},
+    {label:'Raleway', value:'"Raleway", sans-serif'},
+    {label:'Poppins', value:'"Poppins", sans-serif'},
+    {label:'PT Sans', value:'"PT Sans", sans-serif'},
+    {label:'Noto Sans', value:'"Noto Sans", sans-serif'},
+    {label:'Nunito', value:'"Nunito", sans-serif'},
+    {label:'Ubuntu', value:'"Ubuntu", sans-serif'},
+    {label:'Quicksand', value:'"Quicksand", sans-serif'},
+    {label:'Cabin', value:'"Cabin", sans-serif'},
+    {label:'Inter', value:'Inter, system-ui, Arial'},
     {label:'Trebuchet MS', value:'"Trebuchet MS", sans-serif'},
     {label:'Impact', value:'Impact, Charcoal, sans-serif'},
+    {label:'Bebas Neue', value:'"Bebas Neue", cursive'},
+    {label:'Righteous', value:'"Righteous", cursive'},
+    {label:'Anton', value:'"Anton", sans-serif'},
+    
+    // Serif fonts
+    {label:'Georgia', value:'Georgia, serif'},
+    {label:'Times New Roman', value:'"Times New Roman", Times, serif'},
+    {label:'Merriweather', value:'"Merriweather", serif'},
+    {label:'Playfair Display', value:'"Playfair Display", serif'},
+    {label:'Crimson Text', value:'"Crimson Text", serif'},
+    {label:'Bitter', value:'"Bitter", serif'},
+    {label:'Arvo', value:'"Arvo", serif'},
+    {label:'Abril Fatface', value:'"Abril Fatface", cursive'},
+    
+    // Cursive & Handwriting fonts
+    {label:'Monotype Corsiva', value:'"Monotype Corsiva", cursive'},
+    {label:'Dancing Script', value:'"Dancing Script", cursive'},
+    {label:'Pacifico', value:'"Pacifico", cursive'},
+    {label:'Lobster', value:'"Lobster", cursive'},
+    {label:'Indie Flower', value:'"Indie Flower", cursive'},
+    {label:'Shadows Into Light', value:'"Shadows Into Light", cursive'},
+    {label:'Permanent Marker', value:'"Permanent Marker", cursive'},
+    {label:'Great Vibes', value:'"Great Vibes", cursive'},
+    {label:'Satisfy', value:'"Satisfy", cursive'},
+    {label:'Amatic SC', value:'"Amatic SC", cursive'},
+    {label:'Caveat', value:'"Caveat", cursive'},
+    {label:'Courgette', value:'"Courgette", cursive'},
+    {label:'Kaushan Script', value:'"Kaushan Script", cursive'},
+    {label:'Parisienne', value:'"Parisienne", cursive'},
+    {label:'Architects Daughter', value:'"Architects Daughter", cursive'},
+    {label:'Handlee', value:'"Handlee", cursive'},
+    {label:'Patrick Hand', value:'"Patrick Hand", cursive'},
+    
+    // Monospace fonts
     {label:'Courier New', value:'"Courier New", Courier, monospace'}
   ];
 
@@ -247,8 +322,29 @@
     variables: { title:"", subtitle:"", price:"", notes:"" },
     fields: [],
     selectedId: null,
-    snapElements: false
+    snapElements: false,
+    csvData: [] // Store all CSV rows for batch export
   };
+
+  // Load Google Fonts dynamically using Web Font Loader
+  if(typeof WebFont !== 'undefined'){
+    WebFont.load({
+      google: {
+        families: [
+          'Roboto:400,700', 'Open Sans:400,700', 'Lato:400,700', 'Montserrat:400,700',
+          'Oswald:400,700', 'Raleway:400,700', 'Poppins:400,700', 'Merriweather:400,700',
+          'Playfair Display:400,700', 'PT Sans:400,700', 'Noto Sans:400,700', 'Nunito:400,700',
+          'Ubuntu:400,700', 'Quicksand:400,700', 'Dancing Script:400,700', 'Pacifico',
+          'Lobster', 'Bebas Neue', 'Indie Flower', 'Shadows Into Light', 'Abril Fatface',
+          'Righteous', 'Anton', 'Permanent Marker', 'Cabin:400,700', 'Crimson Text:400,700',
+          'Bitter:400,700', 'Arvo:400,700', 'Great Vibes', 'Satisfy', 'Amatic SC:400,700',
+          'Caveat:400,700', 'Courgette', 'Kaushan Script', 'Parisienne', 'Architects Daughter',
+          'Handlee', 'Patrick Hand'
+        ]
+      }
+    });
+  }
+
 
   function el(tag, attrs={}, ...kids){
     const n = document.createElement(tag);
@@ -257,6 +353,27 @@
     }
     for (const k of kids){ if(k==null) continue; if(typeof k === 'string') n.appendChild(document.createTextNode(k)); else n.appendChild(k); }
     return n;
+  }
+
+  // Resolve template string with variables: "Hello {{name}}" -> "Hello John"
+  function resolveTemplate(template, variables){
+    if(!template) return '';
+    return template.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
+      return variables[varName] !== undefined ? variables[varName] : match;
+    });
+  }
+
+  // Get text for a field, supporting both old varKey and new template modes
+  function getFieldText(f){
+    // New template mode: field has a 'template' property with {{variable}} syntax
+    if(f.template !== undefined){
+      return resolveTemplate(f.template, state.variables);
+    }
+    // Legacy mode: field has a varKey that maps to a single variable
+    if(f.varKey){
+      return state.variables[f.varKey] ?? '';
+    }
+    return '';
   }
 
   function updateStatus(){
@@ -289,6 +406,84 @@
     if(!key) return;
     if(state.variables[key]){ alert('Variable already exists.'); return; }
     state.variables[key]=""; newVarKey.value=''; refreshVarList();
+  });
+
+  // CSV import
+  csvFile.addEventListener('change', (e)=>{
+    const file = e.target.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const csvText = reader.result;
+      const lines = csvText.split('\n').filter(line => line.trim());
+      if(lines.length < 2){ alert('CSV must have at least 2 rows (headers and values)'); return; }
+      
+      // Parse CSV (simple parser, handles quotes)
+      const parseCSVLine = (line) => {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        for(let i = 0; i < line.length; i++){
+          const char = line[i];
+          const nextChar = line[i+1];
+          if(char === '"'){
+            if(inQuotes && nextChar === '"'){
+              current += '"'; i++; // escaped quote
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if(char === ',' && !inQuotes){
+            result.push(current.trim());
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        result.push(current.trim());
+        return result;
+      };
+      
+      const headers = parseCSVLine(lines[0]);
+      
+      // Parse all data rows for batch export
+      const allData = [];
+      for(let i = 1; i < lines.length; i++){
+        const rowValues = parseCSVLine(lines[i]);
+        if(rowValues.length > 0){
+          const rowData = {};
+          headers.forEach((key, idx) => {
+            const k = key.trim();
+            if(k && idx < rowValues.length){
+              rowData[k] = rowValues[idx] || '';
+            }
+          });
+          allData.push(rowData);
+        }
+      }
+      
+      // Store all rows for batch export
+      state.csvData = allData;
+      
+      // Update variables with first row for preview
+      if(allData.length > 0){
+        state.variables = {...state.variables, ...allData[0]};
+      }
+      
+      refreshVarList();
+      refreshOverlays();
+      updateStatus();
+      csvFile.value = ''; // reset input
+      
+      // Show batch export option if multiple rows
+      if(allData.length > 1){
+        btnBatchExport.style.display = 'inline-block';
+        batchHint.style.display = 'block';
+        alert(`Loaded ${allData.length} rows from CSV. Use "Batch Export" to generate images for all rows.`);
+      } else {
+        btnBatchExport.style.display = 'none';
+        batchHint.style.display = 'none';
+      }
+    };
+    reader.readAsText(file);
   });
 
   // Background loading
@@ -350,7 +545,7 @@
       const id = o.dataset.id;
       const f = state.fields.find(x=>x.id===id);
       if(!f) continue;
-      const text = state.variables[f.varKey] ?? '';
+      const text = getFieldText(f);
       const inner = o.querySelector('.overlay-inner');
       inner.textContent = text;
       inner.style.fontFamily = f.fontFamily;
@@ -378,7 +573,7 @@
     o.appendChild(inner); o.appendChild(handle);
 
     // Initial styles
-    inner.textContent = state.variables[f.varKey] ?? '';
+    inner.textContent = getFieldText(f);
     o.style.transform = `translate(${f.x*state.scale}px, ${f.y*state.scale}px)`;
     o.style.width = (f.w*state.scale)+'px';
 
@@ -487,7 +682,7 @@
     if(!oh){
       const tmp = document.createElement('canvas').getContext('2d');
       tmp.font = (f.italic? 'italic ' : '') + (f.bold? '700 ' : '400 ') + ' ' + f.fontSize + 'px ' + f.fontFamily;
-      const words = String(state.variables[f.varKey]||'').split(/\s+/);
+      const words = String(getFieldText(f)||'').split(/\s+/);
       let line='', lines=1; const lh = f.fontSize * (f.lineHeight||1.2);
       for(let i=0;i<words.length;i++){
         const t = line? line + ' ' + words[i] : words[i];
@@ -512,10 +707,23 @@
     const f = currentField();
     if(!f){ fieldInspector.appendChild(el('div', {class:'hint'}, 'No field selected. Click a field to edit.')); return; }
 
-    // Variable binding
-    const varSel = el('select', {onchange:(e)=>{ f.varKey=e.target.value; refreshOverlays(); }}, ...Object.keys(state.variables).map(k=>{
+    // Variable binding (legacy mode)
+    const varSel = el('select', {onchange:(e)=>{ f.varKey=e.target.value; delete f.template; refreshOverlays(); }}, ...Object.keys(state.variables).map(k=>{
       const opt = el('option', {value:k}, k); if(k===f.varKey) opt.selected=true; return opt; }));
-    fieldInspector.appendChild(inspectorControl('Variable', varSel));
+    fieldInspector.appendChild(inspectorControl('Variable (legacy)', varSel));
+
+    // Template mode (new)
+    const templateInput = el('textarea', {
+      placeholder:'e.g., Hello {{name}}, your price is {{price}}',
+      value: f.template !== undefined ? f.template : '',
+      oninput:(e)=>{ 
+        f.template = e.target.value; 
+        if(f.template) delete f.varKey; 
+        refreshOverlays(); 
+      }
+    });
+    fieldInspector.appendChild(inspectorControl('Template (use {{variable}})', templateInput));
+    fieldInspector.appendChild(el('div', {class:'hint', style:'margin-bottom:10px'}, 'Use template for multi-variable text, or variable for single value (legacy).'));
 
     // Font family (dropdown)
     const famSel = (function(){
@@ -549,7 +757,7 @@
     fieldInspector.appendChild(row2);
 
     // Align / Letter spacing / Line height
-    const align = el('select', {onchange:(e)=>{ f.align=e.target.value; refreshOverlays(); }}, ['left','center','right'].map(a=>{ const o=el('option',{value:a}, a); if(f.align===a)o.selected=true; return o; }));
+    const align = el('select', {onchange:(e)=>{ f.align=e.target.value; refreshOverlays(); }}, ...['left','center','right'].map(a=>{ const o=el('option',{value:a}, a); if(f.align===a)o.selected=true; return o; }));
     const lspace = el('input', {type:'number', value:f.letterSpacing, step:'0.5', oninput:(e)=>{ f.letterSpacing=parseFloat(e.target.value)||0; refreshOverlays(); }});
     const lheight = el('input', {type:'number', value:f.lineHeight, step:'0.05', oninput:(e)=>{ f.lineHeight=parseFloat(e.target.value)||1.2; refreshOverlays(); }});
     const row3 = el('div', {class:'uirow'}, inspectorControl('Align', align), inspectorControl('Letter spacing', lspace), inspectorControl('Line height', lheight));
@@ -618,60 +826,57 @@
     return lines;
   }
 
-  function exportImage(type, quality){
+  function exportImage(type, quality, scale = 1){
     if(!state.bg){ alert('Load a background image first.'); return; }
+    
+    // SVG export
+    if(type === 'SVG'){
+      exportSVG(scale);
+      return;
+    }
+    
+    // Raster export (PNG, JPEG, WebP) with scaling
     const cvs = document.createElement('canvas');
-    cvs.width = state.bgNatural.w; cvs.height = state.bgNatural.h;
+    cvs.width = state.bgNatural.w * scale;
+    cvs.height = state.bgNatural.h * scale;
     const ctx = cvs.getContext('2d');
 
     // Draw background
     const img = new Image(); img.onload = ()=>{
-      ctx.drawImage(img, 0, 0);
-      // Draw each field
+      ctx.drawImage(img, 0, 0, cvs.width, cvs.height);
+      // Draw each field with scaling
       for(const f of state.fields){
-        const text = state.variables[f.varKey] ?? '';
+        const text = getFieldText(f);
         ctx.save();
-        ctx.translate(f.x + 6, f.y + 6 + ((f.fontSize * (f.lineHeight||1.2) - f.fontSize)/2));
+        ctx.translate((f.x + 6) * scale, (f.y + 6) * scale);
         
-        ctx.font = `${f.italic? 'italic ':''}${f.bold? '700 ': '400 '} ${f.fontSize}px ${f.fontFamily}`;
+        ctx.font = `${f.italic? 'italic ':''}${f.bold? '700 ': '400 '} ${f.fontSize * scale}px ${f.fontFamily}`;
         ctx.textBaseline = 'top';
         ctx.fillStyle = f.color || '#fff';
-        ctx.lineWidth = f.strokeWidth || 0;
+        ctx.lineWidth = (f.strokeWidth || 0) * scale;
         if(f.strokeWidth>0){ ctx.strokeStyle = f.strokeColor || '#000'; }
-        // handle align in wrapText by switching textAlign
-        if(f.strokeWidth>0){
-          // hacky stroke+fill by drawing twice
-          ctx.save();
-          ctx.textAlign = f.align;
-          const lines = text.split(/\n/);
-          let y=0;
-          for(let i=0;i<lines.length;i++){
-            const l = lines[i];
-            // manual wrap with measureText
-            // use hidden wrapText to count lines but strokeText per line for outline effect
-          }
-          ctx.restore();
-        }
-        // Proper wrapped draw
+        
         // align text like DOM overlay
         ctx.textAlign = (f.align==='center' ? 'center' : (f.align==='right' ? 'right' : 'left'));
-        ctx.letterSpacing = f.letterSpacing || 0; // not widely supported on canvas; ignored (kept for future)
+        ctx.letterSpacing = (f.letterSpacing || 0) * scale;
+        
         // Stroke first (if any), then fill. We'll implement simple wrap that draws both.
         const drawWrapped = (drawStroke=false)=>{
           const txt = (''+text).replace(/\r/g,'');
           const words = txt.split(/\s+/);
-          let line=''; let yy=0; const lh = f.fontSize * (f.lineHeight||1.2);
+          let line=''; let yy=0; const lh = f.fontSize * (f.lineHeight||1.2) * scale;
+          const maxWidth = (f.w - 12) * scale;
           for(let i=0;i<words.length;i++){
             const t = line ? line+" "+words[i] : words[i];
             const w = ctx.measureText(t).width;
-            if((f.w-12)>0 && w>(f.w-12) && i>0){
-              if(drawStroke){ ctx.strokeText(line, alignX(f.align, f.w-12), yy); }
-              else { ctx.fillText(line, alignX(f.align, f.w-12), yy); }
+            if(maxWidth > 0 && w > maxWidth && i>0){
+              if(drawStroke){ ctx.strokeText(line, alignX(f.align, maxWidth), yy); }
+              else { ctx.fillText(line, alignX(f.align, maxWidth), yy); }
               line=words[i]; yy += lh;
             } else { line = t; }
           }
-          if(drawStroke){ ctx.strokeText(line, alignX(f.align, f.w-12), yy); }
-          else{ ctx.fillText(line, alignX(f.align, f.w-12), yy); }
+          if(drawStroke){ ctx.strokeText(line, alignX(f.align, maxWidth), yy); }
+          else{ ctx.fillText(line, alignX(f.align, maxWidth), yy); }
         }
         function alignX(a, width){ if(a==='center') return width/2; if(a==='right') return width; return 0; }
 
@@ -687,10 +892,314 @@
     };
     img.src = state.bg;
   }
+  
+  // SVG export function
+  function exportSVG(scale = 1){
+    const width = state.bgNatural.w * scale;
+    const height = state.bgNatural.h * scale;
+    
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
+    
+    // Add background image
+    svg += `<image href="${state.bg}" width="${width}" height="${height}" preserveAspectRatio="none"/>`;
+    
+    // Add text fields
+    for(const f of state.fields){
+      const text = getFieldText(f);
+      const x = (f.x + 6) * scale;
+      const y = (f.y + 6) * scale;
+      const fontSize = f.fontSize * scale;
+      const lineHeight = fontSize * (f.lineHeight || 1.2);
+      
+      // Parse text and wrap
+      const words = (''+text).replace(/\r/g,'').split(/\s+/);
+      const maxWidth = (f.w - 12) * scale;
+      let lines = [];
+      let currentLine = '';
+      
+      // Simple word wrapping for SVG
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.font = `${f.italic? 'italic ':''}${f.bold? '700 ': '400 '} ${fontSize}px ${f.fontFamily}`;
+      
+      for(let i = 0; i < words.length; i++){
+        const testLine = currentLine ? currentLine + ' ' + words[i] : words[i];
+        const metrics = tempCtx.measureText(testLine);
+        if(maxWidth > 0 && metrics.width > maxWidth && i > 0){
+          lines.push(currentLine);
+          currentLine = words[i];
+        } else {
+          currentLine = testLine;
+        }
+      }
+      if(currentLine) lines.push(currentLine);
+      
+      // Create text group
+      svg += `<g>`;
+      
+      // Add stroke if needed
+      if(f.strokeWidth > 0){
+        for(let i = 0; i < lines.length; i++){
+          const lineY = y + (i * lineHeight);
+          let textX = x;
+          let anchor = 'start';
+          if(f.align === 'center'){ textX = x + maxWidth/2; anchor = 'middle'; }
+          else if(f.align === 'right'){ textX = x + maxWidth; anchor = 'end'; }
+          
+          svg += `<text x="${textX}" y="${lineY}" font-family="${f.fontFamily}" font-size="${fontSize}" `;
+          svg += `fill="none" stroke="${f.strokeColor || '#000'}" stroke-width="${f.strokeWidth * scale}" `;
+          svg += `text-anchor="${anchor}" dominant-baseline="text-before-edge"`;
+          if(f.bold) svg += ` font-weight="700"`;
+          if(f.italic) svg += ` font-style="italic"`;
+          svg += `>${escapeXML(lines[i])}</text>`;
+        }
+      }
+      
+      // Add fill text
+      for(let i = 0; i < lines.length; i++){
+        const lineY = y + (i * lineHeight);
+        let textX = x;
+        let anchor = 'start';
+        if(f.align === 'center'){ textX = x + maxWidth/2; anchor = 'middle'; }
+        else if(f.align === 'right'){ textX = x + maxWidth; anchor = 'end'; }
+        
+        svg += `<text x="${textX}" y="${lineY}" font-family="${f.fontFamily}" font-size="${fontSize}" `;
+        svg += `fill="${f.color || '#fff'}" text-anchor="${anchor}" dominant-baseline="text-before-edge"`;
+        if(f.bold) svg += ` font-weight="700"`;
+        if(f.italic) svg += ` font-style="italic"`;
+        svg += `>${escapeXML(lines[i])}</text>`;
+      }
+      
+      svg += `</g>`;
+    }
+    
+    svg += `</svg>`;
+    
+    // Download SVG
+    const blob = new Blob([svg], {type: 'image/svg+xml'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'flyer.svg';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  
+  function escapeXML(str){
+    return String(str).replace(/&/g, '&amp;')
+                      .replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;')
+                      .replace(/"/g, '&quot;')
+                      .replace(/'/g, '&apos;');
+  }
 
   btnExport.addEventListener('click', ()=>{
-    exportImage(fmtSel.value, parseFloat(qInput.value)||0.92);
+    const scale = parseFloat(exportScaleInput.value) || 1;
+    exportImage(fmtSel.value, parseFloat(qInput.value)||0.92, scale);
   });
+
+  // Batch export for CSV data
+  btnBatchExport.addEventListener('click', async ()=>{
+    if(!state.bg){ alert('Load a background image first.'); return; }
+    if(state.csvData.length === 0){ alert('No CSV data loaded.'); return; }
+    
+    const format = fmtSel.value;
+    const quality = parseFloat(qInput.value)||0.92;
+    const scale = parseFloat(exportScaleInput.value) || 1;
+    const totalRows = state.csvData.length;
+    
+    if(!confirm(`Export ${totalRows} images? This may take a moment.`)) return;
+    
+    btnBatchExport.disabled = true;
+    btnBatchExport.textContent = 'Exporting...';
+    
+    // Use JSZip for batch downloads if available, otherwise download individually
+    const images = [];
+    
+    for(let i = 0; i < totalRows; i++){
+      const rowData = state.csvData[i];
+      
+      // Temporarily update variables
+      const originalVars = {...state.variables};
+      state.variables = {...state.variables, ...rowData};
+      
+      // Generate image with scale
+      const dataURL = await generateImageDataURL(format, quality, scale);
+      
+      // Store for download
+      images.push({
+        name: `flyer-${i+1}.${format.toLowerCase()}`,
+        data: dataURL
+      });
+      
+      // Restore original variables
+      state.variables = originalVars;
+      
+      // Update progress
+      btnBatchExport.textContent = `Exporting ${i+1}/${totalRows}...`;
+    }
+    
+    // Download all images
+    for(const img of images){
+      const a = document.createElement('a');
+      a.href = img.data;
+      a.download = img.name;
+      a.click();
+      await new Promise(resolve => setTimeout(resolve, 100)); // Small delay between downloads
+    }
+    
+    btnBatchExport.disabled = false;
+    btnBatchExport.textContent = 'Batch Export';
+    refreshOverlays(); // Restore display
+    alert(`Successfully exported ${totalRows} images!`);
+  });
+  
+  // Helper function to generate image as data URL
+  function generateImageDataURL(type, quality, scale = 1){
+    return new Promise((resolve) => {
+      // SVG export for batch
+      if(type === 'SVG'){
+        // For SVG, we'll return a data URL of the SVG content
+        const svgContent = generateSVGContent(scale);
+        const blob = new Blob([svgContent], {type: 'image/svg+xml'});
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+        return;
+      }
+      
+      const cvs = document.createElement('canvas');
+      cvs.width = state.bgNatural.w * scale;
+      cvs.height = state.bgNatural.h * scale;
+      const ctx = cvs.getContext('2d');
+      
+      const img = new Image();
+      img.onload = ()=>{
+        ctx.drawImage(img, 0, 0, cvs.width, cvs.height);
+        
+        // Draw each field with current variables
+        for(const f of state.fields){
+          const text = getFieldText(f);
+          ctx.save();
+          ctx.translate((f.x + 6) * scale, (f.y + 6) * scale);
+          
+          ctx.font = `${f.italic? 'italic ':''}${f.bold? '700 ': '400 '} ${f.fontSize * scale}px ${f.fontFamily}`;
+          ctx.textBaseline = 'top';
+          ctx.fillStyle = f.color || '#fff';
+          ctx.lineWidth = (f.strokeWidth || 0) * scale;
+          if(f.strokeWidth>0){ ctx.strokeStyle = f.strokeColor || '#000'; }
+          
+          ctx.textAlign = (f.align==='center' ? 'center' : (f.align==='right' ? 'right' : 'left'));
+          ctx.letterSpacing = (f.letterSpacing || 0) * scale;
+          
+          const drawWrapped = (drawStroke=false)=>{
+            const txt = (''+text).replace(/\r/g,'');
+            const words = txt.split(/\s+/);
+            let line=''; let yy=0; const lh = f.fontSize * (f.lineHeight||1.2) * scale;
+            const maxWidth = (f.w - 12) * scale;
+            for(let i=0;i<words.length;i++){
+              const t = line ? line+" "+words[i] : words[i];
+              const w = ctx.measureText(t).width;
+              if(maxWidth > 0 && w > maxWidth && i>0){
+                if(drawStroke){ ctx.strokeText(line, alignX(f.align, maxWidth), yy); }
+                else { ctx.fillText(line, alignX(f.align, maxWidth), yy); }
+                line=words[i]; yy += lh;
+              } else { line = t; }
+            }
+            if(drawStroke){ ctx.strokeText(line, alignX(f.align, maxWidth), yy); }
+            else{ ctx.fillText(line, alignX(f.align, maxWidth), yy); }
+          }
+          function alignX(a, width){ if(a==='center') return width/2; if(a==='right') return width; return 0; }
+          
+          if(f.strokeWidth>0){ drawWrapped(true); }
+          drawWrapped(false);
+          
+          ctx.restore();
+        }
+        
+        const mime = type==='JPEG' ? 'image/jpeg' : (type==='WebP' ? 'image/webp' : 'image/png');
+        resolve(cvs.toDataURL(mime, quality));
+      };
+      img.src = state.bg;
+    });
+  }
+  
+  // Helper to generate SVG content (for batch export)
+  function generateSVGContent(scale = 1){
+    const width = state.bgNatural.w * scale;
+    const height = state.bgNatural.h * scale;
+    
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
+    svg += `<image href="${state.bg}" width="${width}" height="${height}" preserveAspectRatio="none"/>`;
+    
+    for(const f of state.fields){
+      const text = getFieldText(f);
+      const x = (f.x + 6) * scale;
+      const y = (f.y + 6) * scale;
+      const fontSize = f.fontSize * scale;
+      const lineHeight = fontSize * (f.lineHeight || 1.2);
+      
+      const words = (''+text).replace(/\r/g,'').split(/\s+/);
+      const maxWidth = (f.w - 12) * scale;
+      let lines = [];
+      let currentLine = '';
+      
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.font = `${f.italic? 'italic ':''}${f.bold? '700 ': '400 '} ${fontSize}px ${f.fontFamily}`;
+      
+      for(let i = 0; i < words.length; i++){
+        const testLine = currentLine ? currentLine + ' ' + words[i] : words[i];
+        const metrics = tempCtx.measureText(testLine);
+        if(maxWidth > 0 && metrics.width > maxWidth && i > 0){
+          lines.push(currentLine);
+          currentLine = words[i];
+        } else {
+          currentLine = testLine;
+        }
+      }
+      if(currentLine) lines.push(currentLine);
+      
+      svg += `<g>`;
+      
+      if(f.strokeWidth > 0){
+        for(let i = 0; i < lines.length; i++){
+          const lineY = y + (i * lineHeight);
+          let textX = x;
+          let anchor = 'start';
+          if(f.align === 'center'){ textX = x + maxWidth/2; anchor = 'middle'; }
+          else if(f.align === 'right'){ textX = x + maxWidth; anchor = 'end'; }
+          
+          svg += `<text x="${textX}" y="${lineY}" font-family="${f.fontFamily}" font-size="${fontSize}" `;
+          svg += `fill="none" stroke="${f.strokeColor || '#000'}" stroke-width="${f.strokeWidth * scale}" `;
+          svg += `text-anchor="${anchor}" dominant-baseline="text-before-edge"`;
+          if(f.bold) svg += ` font-weight="700"`;
+          if(f.italic) svg += ` font-style="italic"`;
+          svg += `>${escapeXML(lines[i])}</text>`;
+        }
+      }
+      
+      for(let i = 0; i < lines.length; i++){
+        const lineY = y + (i * lineHeight);
+        let textX = x;
+        let anchor = 'start';
+        if(f.align === 'center'){ textX = x + maxWidth/2; anchor = 'middle'; }
+        else if(f.align === 'right'){ textX = x + maxWidth; anchor = 'end'; }
+        
+        svg += `<text x="${textX}" y="${lineY}" font-family="${f.fontFamily}" font-size="${fontSize}" `;
+        svg += `fill="${f.color || '#fff'}" text-anchor="${anchor}" dominant-baseline="text-before-edge"`;
+        if(f.bold) svg += ` font-weight="700"`;
+        if(f.italic) svg += ` font-style="italic"`;
+        svg += `>${escapeXML(lines[i])}</text>`;
+      }
+      
+      svg += `</g>`;
+    }
+    
+    svg += `</svg>`;
+    return svg;
+  }
+
 
   // Selection-aware UI enabling/disabling and handlers
   function updateSelectionUI(){
