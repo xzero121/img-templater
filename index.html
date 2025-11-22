@@ -23,8 +23,8 @@
     display:flex; min-height:100vh; overflow:hidden;
   }
   /* Layout */
-  .sidebar{width:340px; max-width:40vw; background:var(--panel); border-right:1px solid #0008; padding:14px; overflow:auto}
-  .main{flex:1; display:flex; flex-direction:column;}
+  .sidebar{width:340px; max-width:40vw; background:var(--panel); border-right:1px solid #0008; padding:14px; overflow:auto; overflow-x:hidden;}
+  .main{flex:1; display:flex; flex-direction:column; min-width:0;}
   header{display:flex; gap:10px; align-items:center; padding:10px 12px; border-bottom:1px solid #0008; background:#0b1328; position:sticky; top:0; z-index:5}
   header h1{font-size:16px; margin:0; font-weight:600; letter-spacing:.2px}
   header .spacer{flex:1}
@@ -46,17 +46,24 @@
   .rotate{display:none !important}
 
   /* Controls */
-  h2{font-size:12px; text-transform:uppercase; letter-spacing:.12em; color:#9ca3af; margin:18px 0 6px}
-  .card{background:var(--muted); border:1px solid #0008; border-radius:12px; padding:12px; box-shadow:var(--shadow); margin-bottom:14px; overflow:visible}
+  h2{font-size:12px; text-transform:uppercase; letter-spacing:.12em; color:#9ca3af; margin:0 0 6px; cursor:pointer; user-select:none; display:flex; align-items:center; justify-content:space-between;}
+  h2:hover{color:#cbd5e1;}
+  h2::after{content:'▼'; font-size:10px; transition:transform 0.2s; display:inline-block;}
+  h2.collapsed::after{transform:rotate(-90deg);}
+  .card{background:var(--muted); border:1px solid #0008; border-radius:12px; padding:12px; box-shadow:var(--shadow); margin-bottom:14px; overflow:hidden;}
+  .card-content{overflow:hidden; transition:max-height 0.3s ease-out, opacity 0.2s ease-out; max-height:2000px; opacity:1;}
+  .card-content.collapsed{max-height:0; opacity:0; padding:0;}
   .uirow{display:flex; gap:8px; flex-wrap:wrap}
-  label{font-size:12px; color:#a3a3a3; display:block; margin-bottom:4px}
+  label{font-size:12px; color:#a3a3a3; display:block; margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   input[type="text"], input[type="number"], select, textarea{
     width:100%; padding:7px 9px; border-radius:8px; border:1px solid #000a; background:#0c1326; color:var(--text);
+    min-width:0; box-sizing:border-box;
   }
-  textarea{min-height:72px; resize:vertical}
+  textarea{min-height:72px; resize:vertical; word-break:break-word;}
   .btn{
     background:linear-gradient(180deg, #1e293b, #0b1328); border:1px solid #000; color:var(--text);
     padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:600; letter-spacing:.2px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;
   }
   .btn.primary{background:linear-gradient(180deg, #16a34a, #128141); border-color:#0b5a2d}
   .btn.warn{background:linear-gradient(180deg, #f59e0b, #c97b00); border-color:#7a4a00}
@@ -66,21 +73,20 @@
   .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}
   .grid-toggle{display:none}
   /* toggles removed */
-  .hint{font-size:12px; color:#9ca3af}
+  .hint{font-size:12px; color:#9ca3af; word-break:break-word;}
   .small{font-size:12px}
+  .mono{overflow:hidden; text-overflow:ellipsis;}
 
   /* Stage grid */
   .grid::before{display:none !important}
 
   /* Footer */
   footer{padding:8px 12px; border-top:1px solid #0008; background:#0b1328; display:flex; gap:10px; align-items:center}
-  footer .stat{font-size:12px; color:#9ca3af}
+  footer .stat{font-size:12px; color:#9ca3af; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 
   /* Hidden canvas for export */
   canvas{background:transparent}
 </style>
-<!-- Bootstrap CSS (CDN) -->
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EPs0ZKxK6n+vJxwNf0hFQ9YB8bO9h8qfZC2I3c1l2xUu3o3Xw3Yk" crossorigin="anonymous">
 <!-- Google Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -91,11 +97,10 @@
 <body>
   <div class="sidebar" id="sidebar">
     <div class="card">
-      <div class="uirow" style="align-items:center; justify-content:space-between;">
-        <div>
-          <h2>Background</h2>
-          <div class="hint">Upload your flyer image</div>
-        </div>
+      <h2 id="bgHeader">Background</h2>
+      <div class="card-content" id="bgContent">
+      <div class="uirow" style="align-items:center; justify-content:space-between; margin-bottom:8px;">
+        <div class="hint">Upload your flyer image</div>
         <button class="btn ghost" id="btnClear">Clear</button>
       </div>
       <div class="uirow" style="align-items:end">
@@ -113,10 +118,12 @@
         <button class="btn" id="btnSnapElements">Snap to elements: Off</button>
       </div>
       </div>
+      </div>
 
     <div class="card" id="varsCard">
-      <h2>Variables</h2>
-      <div class="hint">Add keys and values. Bind them to fields on the image.</div>
+      <h2 id="varsHeader">Variables</h2>
+      <div class="card-content" id="varsContent">
+      <div class="hint" style="margin-bottom:8px;">Add keys and values. Bind them to fields on the image.</div>
       <div id="vars"></div>
       <div class="uirow" style="margin-top:8px">
         <input id="newVarKey" placeholder="e.g., title" />
@@ -127,9 +134,12 @@
         <input type="file" id="csvFile" accept=".csv,text/csv" />
       </div>
       <div class="hint" style="margin-top:4px">CSV: first row = variable names, second row = values</div>
+      </div>
     </div>
 
-    <div class="card"><h2>Fields</h2>
+    <div class="card">
+      <h2 id="fieldsHeader">Fields</h2>
+      <div class="card-content" id="fieldsContent">
       <div class="uirow" style="margin-bottom:6px">
         <select id="varSelect"></select>
         <button class="btn" id="addField">+ Text Field</button>
@@ -147,19 +157,23 @@
       <div id="fieldInspector">
         <div class="hint">Select a field on the canvas to edit its properties.</div>
       </div>
+      </div>
     </div>
 
     <div class="card">
-      <h2>Template</h2>
+      <h2 id="templateHeader">Template</h2>
+      <div class="card-content" id="templateContent">
       <div class="uirow">
         <button class="btn" id="btnSaveJson">Save JSON</button>
         <input type="file" id="loadJson" accept="application/json" />
       </div>
       <div class="hint" style="margin-top:6px">Templates store variables + field positions/styles.</div>
+      </div>
     </div>
 
     <div class="card">
-      <h2>Export</h2>
+      <h2 id="exportHeader">Export</h2>
+      <div class="card-content" id="exportContent">
       <div class="uirow" style="align-items:end">
         <div style="flex:1">
           <label>Format</label>
@@ -188,6 +202,7 @@
       </div>
       <div class="hint" style="margin-top:6px">Drag fields where you want, update variables, export. Easy.</div>
       <div class="hint" id="batchHint" style="margin-top:4px; display:none; color:var(--accent);">Batch mode: Export all CSV rows</div>
+      </div>
     </div>
   </div>
 
@@ -1220,6 +1235,37 @@
 
   // Init
   refreshVarList(); updateStatus(); updateSelectionUI();
+  
+  // Collapsible sections
+  function setupCollapsible(headerId, contentId){
+    const header = document.getElementById(headerId);
+    const content = document.getElementById(contentId);
+    if(!header || !content) return;
+    
+    header.addEventListener('click', ()=>{
+      const isCollapsed = content.classList.toggle('collapsed');
+      header.classList.toggle('collapsed', isCollapsed);
+      // Store state in localStorage
+      try{
+        localStorage.setItem('collapsed_' + headerId, isCollapsed ? '1' : '0');
+      }catch(e){}
+    });
+    
+    // Restore state from localStorage
+    try{
+      const stored = localStorage.getItem('collapsed_' + headerId);
+      if(stored === '1'){
+        content.classList.add('collapsed');
+        header.classList.add('collapsed');
+      }
+    }catch(e){}
+  }
+  
+  setupCollapsible('bgHeader', 'bgContent');
+  setupCollapsible('varsHeader', 'varsContent');
+  setupCollapsible('fieldsHeader', 'fieldsContent');
+  setupCollapsible('templateHeader', 'templateContent');
+  setupCollapsible('exportHeader', 'exportContent');
 })();
 </script>
 </body>
