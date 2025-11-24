@@ -779,20 +779,6 @@
     const w = el('input', {type:'number', value:f.w, step:'1', oninput:(e)=>{ f.w=Math.max(20, parseFloat(e.target.value)||100); refreshOverlays(); }});
     const row4 = el('div', {class:'uirow'}, inspectorControl('X', x), inspectorControl('Y', y), inspectorControl('Width', w));
     fieldInspector.appendChild(row4);
-
-    // Quick align & center controls
-    const alignBtns = el('div', {class:'uirow'},
-      (function(){ const b = el('button',{class:'btn'},'Left'); b.onclick=()=>{ f.align='left'; refreshOverlays(); refreshInspector(); }; return b; })(),
-      (function(){ const b = el('button',{class:'btn'},'Center'); b.onclick=()=>{ f.align='center'; refreshOverlays(); refreshInspector(); }; return b; })(),
-      (function(){ const b = el('button',{class:'btn'},'Right'); b.onclick=()=>{ f.align='right'; refreshOverlays(); refreshInspector(); }; return b; })()
-    );
-    fieldInspector.appendChild(inspectorControl('Text align (quick)', alignBtns));
-
-    const centerBtns = el('div', {class:'uirow'},
-      (function(){ const b = el('button',{class:'btn'},'Center X'); b.onclick=()=>centerField(f,'x'); return b; })(),
-      (function(){ const b = el('button',{class:'btn'},'Center Y'); b.onclick=()=>centerField(f,'y'); return b; })()
-    );
-    fieldInspector.appendChild(inspectorControl('Field position', centerBtns));
   }
 
   // Save / load template JSON
