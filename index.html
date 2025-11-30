@@ -78,6 +78,33 @@
 
   /* Hidden canvas for export */
   canvas{background:transparent}
+  
+  /* Modal styles */
+  .modal-overlay{
+    position:fixed; top:0; left:0; right:0; bottom:0;
+    background:rgba(0,0,0,0.7); z-index:1000;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .modal-content{
+    background:var(--panel); border:1px solid #0008; border-radius:16px;
+    padding:20px; max-width:800px; width:90%; max-height:80vh; overflow-y:auto;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  .modal-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;}
+  .modal-header h3{margin:0; font-size:18px; font-weight:600;}
+  .modal-close{background:none; border:none; color:var(--text); font-size:24px; cursor:pointer; padding:4px 8px;}
+  .modal-close:hover{color:var(--danger);}
+  .mapping-row{
+    display:flex; gap:12px; align-items:center; padding:12px;
+    background:var(--muted); border-radius:8px; margin-bottom:8px;
+  }
+  .mapping-image{width:80px; height:60px; object-fit:contain; background:#0a0f1f; border-radius:6px; border:1px solid #0008;}
+  .mapping-info{flex:1; min-width:0;}
+  .mapping-name{font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .mapping-select{flex:0 0 200px;}
+  .mapping-preview{font-size:11px; color:#9ca3af; margin-top:2px;}
+  .upload-section{margin-bottom:16px; padding:16px; background:var(--muted); border-radius:12px;}
+  .upload-section h4{margin:0 0 8px 0; font-size:13px; color:#a3a3af;}
 </style>
 <!-- Bootstrap CSS (CDN) -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EPs0ZKxK6n+vJxwNf0hFQ9YB8bO9h8qfZC2I3c1l2xUu3o3Xw3Yk" crossorigin="anonymous">
@@ -201,8 +228,13 @@
           <option value="single">Single (Current Template)</option>
           <option value="random">Random (Random Template per Row)</option>
           <option value="all">All (Export Each Row with Every Template)</option>
+          <option value="mapped">Mapped (Image-to-Template Mapping)</option>
           <option value="datadriven">Data-Driven (CSV Column Selects Template)</option>
         </select>
+        <div id="mappedConfig" style="display:none; margin-top:6px;">
+          <button class="btn" id="btnOpenMappingModal">Configure Image-Template Mapping</button>
+          <div class="hint" style="margin-top:4px">Map background images to their templates.</div>
+        </div>
         <div id="dataDrivenConfig" style="display:none; margin-top:6px;">
           <label>Template Column (from CSV)</label>
           <select id="templateColumnSelect"></select>
@@ -236,6 +268,42 @@
       <div class="stat" id="status">No background loaded.</div>
     </footer>
   </div>
+
+<!-- Image-Template Mapping Modal -->
+<div id="mappingModal" class="modal-overlay" style="display:none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>🔗 Image-Template Mapping</h3>
+      <button class="modal-close" id="closeMappingModal">&times;</button>
+    </div>
+    
+    <div class="upload-section">
+      <h4>1. Upload Background Images</h4>
+      <div class="uirow" style="gap:8px;">
+        <input type="file" id="uploadMappingImages" accept="image/*" multiple />
+      </div>
+      <div class="hint" style="margin-top:4px">Upload images like pic1.svg, pic2.svg, etc.</div>
+    </div>
+    
+    <div class="upload-section">
+      <h4>2. Upload Template JSON Files</h4>
+      <div class="uirow" style="gap:8px;">
+        <input type="file" id="uploadMappingTemplates" accept="application/json" multiple />
+      </div>
+      <div class="hint" style="margin-top:4px">Upload templates like template1.json, template2.json, etc.</div>
+    </div>
+    
+    <div style="margin-bottom:16px;">
+      <h4 style="margin:0 0 8px 0; font-size:13px; color:#a3a3af;">3. Map Each Image to a Template</h4>
+      <div id="mappingList"></div>
+    </div>
+    
+    <div class="uirow" style="justify-content:flex-end; gap:8px;">
+      <button class="btn" id="clearMappings">Clear All</button>
+      <button class="btn primary" id="saveMappings">Save Mappings</button>
+    </div>
+  </div>
+</div>
 
 <script>
 (function(){
@@ -290,6 +358,17 @@
   const templateMode = document.getElementById('templateMode');
   const dataDrivenConfig = document.getElementById('dataDrivenConfig');
   const templateColumnSelect = document.getElementById('templateColumnSelect');
+  
+  // Mapping modal elements
+  const mappedConfig = document.getElementById('mappedConfig');
+  const btnOpenMappingModal = document.getElementById('btnOpenMappingModal');
+  const mappingModal = document.getElementById('mappingModal');
+  const closeMappingModal = document.getElementById('closeMappingModal');
+  const uploadMappingImages = document.getElementById('uploadMappingImages');
+  const uploadMappingTemplates = document.getElementById('uploadMappingTemplates');
+  const mappingList = document.getElementById('mappingList');
+  const clearMappings = document.getElementById('clearMappings');
+  const saveMappings = document.getElementById('saveMappings');
 
   // Comprehensive font list including Google Fonts
   const presetFonts = [  
@@ -359,7 +438,12 @@
     selectedId: null,
     snapElements: false,
     csvData: [], // Store all CSV rows for batch export
-    templates: [] // Store multiple templates for bulk export: [{name, bg, bgNatural, fields}]
+    templates: [], // Store multiple templates for bulk export: [{name, bg, bgNatural, fields}]
+    // Image-template mappings: [{imageName, imageData, templateName, template}]
+    imageMappings: [],
+    // Temporary storage for mapping modal
+    pendingImages: [], // [{name, dataUrl}]
+    pendingTemplates: [] // [{name, data}]
   };
 
   // Load Google Fonts dynamically using Web Font Loader
@@ -626,10 +710,182 @@
   function updateDataDrivenVisibility(){
     if(templateMode.value === 'datadriven'){
       dataDrivenConfig.style.display = 'block';
+      mappedConfig.style.display = 'none';
+    } else if(templateMode.value === 'mapped'){
+      mappedConfig.style.display = 'block';
+      dataDrivenConfig.style.display = 'none';
     } else {
       dataDrivenConfig.style.display = 'none';
+      mappedConfig.style.display = 'none';
     }
   }
+  
+  // Image-Template Mapping Modal Functions
+  function openMappingModal(){
+    mappingModal.style.display = 'flex';
+    refreshMappingList();
+  }
+  
+  function closeMappingModalFn(){
+    mappingModal.style.display = 'none';
+  }
+  
+  function refreshMappingList(){
+    mappingList.innerHTML = '';
+    
+    if(state.pendingImages.length === 0){
+      mappingList.innerHTML = '<div class="hint">No images uploaded yet. Upload images above to create mappings.</div>';
+      return;
+    }
+    
+    for(let i = 0; i < state.pendingImages.length; i++){
+      const img = state.pendingImages[i];
+      const row = el('div', {class:'mapping-row'},
+        el('img', {class:'mapping-image', src:img.dataUrl, alt:img.name}),
+        el('div', {class:'mapping-info'},
+          el('div', {class:'mapping-name'}, img.name),
+          el('div', {class:'mapping-preview', id:`mapping-preview-${i}`}, img.templateName ? `→ ${img.templateName}` : 'No template selected')
+        ),
+        createTemplateSelect(i, img.templateName)
+      );
+      mappingList.appendChild(row);
+    }
+  }
+  
+  function createTemplateSelect(imageIndex, selectedTemplateName){
+    const select = el('select', {class:'mapping-select', onchange:(e)=>{
+      const templateName = e.target.value;
+      state.pendingImages[imageIndex].templateName = templateName;
+      const previewEl = document.getElementById(`mapping-preview-${imageIndex}`);
+      if(previewEl){
+        previewEl.textContent = templateName ? `→ ${templateName}` : 'No template selected';
+      }
+    }});
+    
+    select.appendChild(el('option', {value:''}, '-- Select Template --'));
+    
+    for(const t of state.pendingTemplates){
+      const opt = el('option', {value:t.name}, t.name);
+      if(t.name === selectedTemplateName) opt.selected = true;
+      select.appendChild(opt);
+    }
+    
+    return el('div', {class:'mapping-select'}, select);
+  }
+  
+  function handleMappingImagesUpload(files){
+    const promises = [];
+    for(const file of files){
+      promises.push(new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          state.pendingImages.push({
+            name: file.name,
+            dataUrl: reader.result,
+            templateName: null
+          });
+          resolve();
+        };
+        reader.onerror = () => {
+          console.error('Error reading image file:', file.name);
+          resolve(); // Resolve anyway to not block other files
+        };
+        reader.readAsDataURL(file);
+      }));
+    }
+    Promise.all(promises).then(() => refreshMappingList());
+  }
+  
+  function handleMappingTemplatesUpload(files){
+    const promises = [];
+    for(const file of files){
+      promises.push(new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          try{
+            const data = JSON.parse(reader.result);
+            state.pendingTemplates.push({
+              name: file.name.replace('.json', ''),
+              data: data
+            });
+          }catch(err){
+            console.error('Error parsing template:', file.name, err);
+          }
+          resolve();
+        };
+        reader.onerror = () => {
+          console.error('Error reading template file:', file.name);
+          resolve(); // Resolve anyway to not block other files
+        };
+        reader.readAsText(file);
+      }));
+    }
+    Promise.all(promises).then(() => refreshMappingList());
+  }
+  
+  function clearAllMappings(){
+    state.pendingImages = [];
+    state.pendingTemplates = [];
+    state.imageMappings = [];
+    uploadMappingImages.value = '';
+    uploadMappingTemplates.value = '';
+    refreshMappingList();
+  }
+  
+  function saveImageMappings(){
+    // Validate that all images have a template assigned
+    const unmapped = state.pendingImages.filter(img => !img.templateName);
+    if(unmapped.length > 0){
+      const imageWord = unmapped.length === 1 ? 'image is' : 'images are';
+      alert(`Please select a template for all images. ${unmapped.length} ${imageWord} unmapped.`);
+      return;
+    }
+    
+    // Create the final mappings
+    state.imageMappings = state.pendingImages.map(img => {
+      const templateData = state.pendingTemplates.find(t => t.name === img.templateName);
+      return {
+        imageName: img.name,
+        imageData: img.dataUrl,
+        templateName: img.templateName,
+        template: templateData ? templateData.data : null
+      };
+    });
+    
+    // Also add these as templates to the main templates collection
+    for(const mapping of state.imageMappings){
+      if(mapping.template){
+        const existingIdx = state.templates.findIndex(t => t.name === mapping.templateName);
+        if(existingIdx === -1){
+          state.templates.push({
+            name: mapping.templateName,
+            bg: mapping.template.bg || null,
+            bgNatural: mapping.template.bgNatural || {w:0, h:0},
+            fields: mapping.template.fields || []
+          });
+        }
+      }
+    }
+    
+    refreshTemplatesList();
+    closeMappingModalFn();
+    alert(`Saved ${state.imageMappings.length} image-template mapping(s).`);
+  }
+  
+  // Mapping modal event listeners
+  btnOpenMappingModal.addEventListener('click', openMappingModal);
+  closeMappingModal.addEventListener('click', closeMappingModalFn);
+  mappingModal.addEventListener('click', (e) => {
+    if(e.target === mappingModal) closeMappingModalFn();
+  });
+  uploadMappingImages.addEventListener('change', (e) => {
+    if(e.target.files.length > 0) handleMappingImagesUpload(e.target.files);
+  });
+  uploadMappingTemplates.addEventListener('change', (e) => {
+    if(e.target.files.length > 0) handleMappingTemplatesUpload(e.target.files);
+  });
+  clearMappings.addEventListener('click', clearAllMappings);
+  saveMappings.addEventListener('click', saveImageMappings);
 
   function refreshTemplateColumnOptions(){
     templateColumnSelect.innerHTML = '';
@@ -1182,6 +1438,11 @@
       return;
     }
     
+    if(mode === 'mapped' && state.imageMappings.length === 0){
+      alert('Please configure image-template mappings first.');
+      return;
+    }
+    
     if(mode === 'datadriven'){
       const columnName = templateColumnSelect.value;
       if(!columnName){
@@ -1194,6 +1455,8 @@
     let totalImages = totalRows;
     if(mode === 'all'){
       totalImages = totalRows * state.templates.length;
+    } else if(mode === 'mapped'){
+      totalImages = totalRows * state.imageMappings.length;
     }
     
     if(!confirm(`Export ${totalImages} images? This may take a moment.`)) return;
@@ -1262,6 +1525,49 @@
           const dataURL = await generateImageDataURL(format, quality, scale);
           images.push({
             name: `flyer-${i+1}-${sanitizeFilename(template.name)}.${format.toLowerCase()}`,
+            data: dataURL
+          });
+          imageCount++;
+          btnBatchExport.textContent = `Exporting ${imageCount}/${totalImages}...`;
+        }
+      }
+    } else if(mode === 'mapped'){
+      // Mapped mode: use image-template mappings
+      for(let i = 0; i < totalRows; i++){
+        const rowData = state.csvData[i];
+        
+        for(let j = 0; j < state.imageMappings.length; j++){
+          const mapping = state.imageMappings[j];
+          
+          // Apply the mapped background image
+          state.bg = mapping.imageData;
+          
+          // Get image dimensions
+          await new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+              state.bgNatural = {w: img.naturalWidth, h: img.naturalHeight};
+              resolve();
+            };
+            img.onerror = () => {
+              console.error('Error loading image:', mapping.imageName);
+              state.bgNatural = {w: 800, h: 600}; // Default fallback dimensions
+              resolve();
+            };
+            img.src = mapping.imageData;
+          });
+          
+          // Apply template fields if available
+          if(mapping.template && mapping.template.fields){
+            state.fields = JSON.parse(JSON.stringify(mapping.template.fields));
+          }
+          
+          state.variables = {...originalState.variables, ...rowData};
+          
+          const dataURL = await generateImageDataURL(format, quality, scale);
+          const imageName = sanitizeFilename(mapping.imageName.replace(/\.[^.]+$/, ''));
+          images.push({
+            name: `${imageName}-row${i+1}.${format.toLowerCase()}`,
             data: dataURL
           });
           imageCount++;
@@ -1516,5 +1822,6 @@
   refreshVarList(); updateStatus(); updateSelectionUI(); refreshTemplatesList();
 })();
 </script>
+
 </body>
 </html>
