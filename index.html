@@ -161,7 +161,7 @@
     <div class="card" id="templatesCard">
       <h2>Templates Collection</h2>
       <div class="hint">Manage multiple templates for bulk export.</div>
-      <div id="templatesList" style="margin-top:8px; max-height:150px; overflow-y:auto;"></div>
+      <div id="templatesList" role="list" aria-label="Templates collection list" style="margin-top:8px; max-height:150px; overflow-y:auto;"></div>
       <div class="uirow" style="margin-top:8px; gap:8px">
         <button class="btn" id="btnAddCurrentTemplate">Add Current as Template</button>
       </div>
@@ -239,6 +239,9 @@
 
 <script>
 (function(){
+  // Constants
+  const MAX_FILENAME_LENGTH = 50;
+  
   const bgFile = document.getElementById('bgFile');
   const bgImg = document.getElementById('bgImg');
   const stage = document.getElementById('stage');
@@ -528,10 +531,10 @@
     } else {
       for(let i = 0; i < state.templates.length; i++){
         const t = state.templates[i];
-        const row = el('div', {class:'uirow', style:'align-items:center; margin-bottom:6px; padding:4px; background:#1a202c; border-radius:6px;'},
+        const row = el('div', {class:'uirow', role:'listitem', style:'align-items:center; margin-bottom:6px; padding:4px; background:#1a202c; border-radius:6px;'},
           el('span', {style:'flex:1; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;'}, t.name),
-          el('button', {class:'btn', style:'padding:4px 8px; font-size:11px;', onclick:(e)=>{ e.stopPropagation(); loadTemplateByIndex(i); }}, 'Load'),
-          el('button', {class:'btn danger', style:'padding:4px 8px; font-size:11px; margin-left:4px;', onclick:(e)=>{ e.stopPropagation(); removeTemplate(i); }}, '×')
+          el('button', {class:'btn', style:'padding:4px 8px; font-size:11px;', title:'Load template', onclick:(e)=>{ e.stopPropagation(); loadTemplateByIndex(i); }}, 'Load'),
+          el('button', {class:'btn danger', style:'padding:4px 8px; font-size:11px; margin-left:4px;', title:'Remove template', 'aria-label':'Remove template', onclick:(e)=>{ e.stopPropagation(); removeTemplate(i); }}, '×')
         );
         templatesList.appendChild(row);
       }
@@ -1269,22 +1272,31 @@
       // Data-driven mode: use column value to select template
       const columnName = templateColumnSelect.value;
       
+      // Pre-compute lowercase template names for efficient matching
+      const templatesWithLowerNames = state.templates.map(t => ({
+        template: t,
+        lowerName: t.name.toLowerCase()
+      }));
+      
       for(let i = 0; i < totalRows; i++){
         const rowData = state.csvData[i];
         const templateName = (rowData[columnName] || '').trim();
+        const templateNameLower = templateName.toLowerCase();
         
-        // Find matching template by name
-        let selectedTemplate = state.templates.find(t => t.name.toLowerCase() === templateName.toLowerCase());
+        // Find matching template by name (exact match first)
+        let selectedTemplate = templatesWithLowerNames.find(t => t.lowerName === templateNameLower)?.template;
         
         if(!selectedTemplate){
           // Try partial match
-          selectedTemplate = state.templates.find(t => t.name.toLowerCase().includes(templateName.toLowerCase()) || templateName.toLowerCase().includes(t.name.toLowerCase()));
+          selectedTemplate = templatesWithLowerNames.find(t => 
+            t.lowerName.includes(templateNameLower) || templateNameLower.includes(t.lowerName)
+          )?.template;
         }
         
         if(!selectedTemplate && state.templates.length > 0){
           // Fallback to first template if no match
           selectedTemplate = state.templates[0];
-          console.warn(`Row ${i+1}: No template match for "${templateName}", using "${selectedTemplate.name}"`);
+          console.warn(`Row ${i+1}: No template match for "${templateName}" in column "${columnName}", using "${selectedTemplate.name}"`);
         }
         
         if(selectedTemplate){
@@ -1329,7 +1341,7 @@
   
   // Helper function to sanitize filename
   function sanitizeFilename(name){
-    return name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 50);
+    return name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, MAX_FILENAME_LENGTH);
   }
   
   // Helper function to generate image as data URL
