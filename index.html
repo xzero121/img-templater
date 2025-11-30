@@ -185,19 +185,6 @@
       <div class="hint" style="margin-top:6px">Templates store variables + field positions/styles.</div>
     </div>
 
-    <div class="card" id="templatesCard">
-      <h2>Templates Collection</h2>
-      <div class="hint">Manage multiple templates for bulk export.</div>
-      <div id="templatesList" role="list" aria-label="Templates collection list" style="margin-top:8px; max-height:150px; overflow-y:auto;"></div>
-      <div class="uirow" style="margin-top:8px; gap:8px">
-        <button class="btn" id="btnAddCurrentTemplate">Add Current as Template</button>
-      </div>
-      <div class="uirow" style="margin-top:8px; gap:8px">
-        <input type="file" id="loadMultipleTemplates" accept="application/json" multiple />
-      </div>
-      <div class="hint" style="margin-top:4px">Load multiple JSON templates at once for bulk operations.</div>
-    </div>
-
     <div class="card">
       <h2>Export</h2>
       <div class="uirow" style="align-items:end">
@@ -222,19 +209,35 @@
         </div>
         <div class="hint" style="flex:1; margin:0; padding-left:8px">Scale export (1x = original size)</div>
       </div>
+      <div class="uirow" style="margin-top:8px; gap:8px">
+        <button class="btn primary" id="btnExport">Export Image</button>
+      </div>
+      <div class="hint" style="margin-top:6px">Single export uses current background and template.</div>
+    </div>
+
+    <div class="card">
+      <h2>Bulk Export</h2>
+      <div class="hint">Export multiple images with different backgrounds and templates.</div>
+      <div class="uirow" style="margin-top:8px; gap:8px">
+        <button class="btn warn" id="btnOpenMappingModal">📁 Setup Image-Template Pairs</button>
+      </div>
+      <div id="mappingStatus" style="margin-top:8px;">
+        <div class="hint">No image-template pairs configured yet.</div>
+      </div>
+      <div id="bulkExportSection" style="display:none; margin-top:8px;">
+        <div class="uirow" style="gap:8px;">
+          <button class="btn primary" id="btnBulkExportAll">Export All Pairs</button>
+        </div>
+      </div>
       <div id="templateModeSection" style="display:none; margin-top:8px;">
-        <label>Template Mode (for Batch)</label>
+        <label>Template Mode (for CSV Batch)</label>
         <select id="templateMode">
           <option value="single">Single (Current Template)</option>
           <option value="random">Random (Random Template per Row)</option>
           <option value="all">All (Export Each Row with Every Template)</option>
-          <option value="mapped">Mapped (Image-to-Template Mapping)</option>
+          <option value="mapped">Mapped (Use Bulk Export Pairs)</option>
           <option value="datadriven">Data-Driven (CSV Column Selects Template)</option>
         </select>
-        <div id="mappedConfig" style="display:none; margin-top:6px;">
-          <button class="btn" id="btnOpenMappingModal">Configure Image-Template Mapping</button>
-          <div class="hint" style="margin-top:4px">Map background images to their templates.</div>
-        </div>
         <div id="dataDrivenConfig" style="display:none; margin-top:6px;">
           <label>Template Column (from CSV)</label>
           <select id="templateColumnSelect"></select>
@@ -242,11 +245,9 @@
         </div>
       </div>
       <div class="uirow" style="margin-top:8px; gap:8px">
-        <button class="btn primary" id="btnExport">Export Image</button>
-        <button class="btn" id="btnBatchExport" style="display:none">Batch Export</button>
+        <button class="btn" id="btnBatchExport" style="display:none">Batch Export (CSV Rows)</button>
       </div>
-      <div class="hint" style="margin-top:6px">Drag fields where you want, update variables, export. Easy.</div>
-      <div class="hint" id="batchHint" style="margin-top:4px; display:none; color:var(--accent);">Batch mode: Export all CSV rows</div>
+      <div class="hint" id="batchHint" style="margin-top:4px; display:none; color:var(--accent);">CSV loaded: Batch export available</div>
     </div>
   </div>
 
@@ -350,17 +351,16 @@
   const btnBatchExport = document.getElementById('btnBatchExport');
   const batchHint = document.getElementById('batchHint');
   
-  // Templates collection elements
-  const templatesList = document.getElementById('templatesList');
-  const btnAddCurrentTemplate = document.getElementById('btnAddCurrentTemplate');
-  const loadMultipleTemplates = document.getElementById('loadMultipleTemplates');
+  // Bulk export elements
   const templateModeSection = document.getElementById('templateModeSection');
   const templateMode = document.getElementById('templateMode');
   const dataDrivenConfig = document.getElementById('dataDrivenConfig');
   const templateColumnSelect = document.getElementById('templateColumnSelect');
+  const mappingStatus = document.getElementById('mappingStatus');
+  const bulkExportSection = document.getElementById('bulkExportSection');
+  const btnBulkExportAll = document.getElementById('btnBulkExportAll');
   
   // Mapping modal elements
-  const mappedConfig = document.getElementById('mappedConfig');
   const btnOpenMappingModal = document.getElementById('btnOpenMappingModal');
   const mappingModal = document.getElementById('mappingModal');
   const closeMappingModal = document.getElementById('closeMappingModal');
@@ -607,97 +607,21 @@
     reader.readAsText(file);
   });
 
-  // Templates Collection Management
-  function refreshTemplatesList(){
-    templatesList.innerHTML = '';
-    if(state.templates.length === 0){
-      templatesList.appendChild(el('div', {class:'hint'}, 'No templates added yet.'));
+  // Internal template management (no UI display)
+  function updateMappingStatus(){
+    if(state.imageMappings.length === 0){
+      mappingStatus.innerHTML = '<div class="hint">No image-template pairs configured yet.</div>';
+      bulkExportSection.style.display = 'none';
     } else {
-      for(let i = 0; i < state.templates.length; i++){
-        const t = state.templates[i];
-        const row = el('div', {class:'uirow', role:'listitem', style:'align-items:center; margin-bottom:6px; padding:4px; background:#1a202c; border-radius:6px;'},
-          el('span', {style:'flex:1; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;'}, t.name),
-          el('button', {class:'btn', style:'padding:4px 8px; font-size:11px;', title:'Load template', onclick:(e)=>{ e.stopPropagation(); loadTemplateByIndex(i); }}, 'Load'),
-          el('button', {class:'btn danger', style:'padding:4px 8px; font-size:11px; margin-left:4px;', title:'Remove template', 'aria-label':'Remove template', onclick:(e)=>{ e.stopPropagation(); removeTemplate(i); }}, '×')
-        );
-        templatesList.appendChild(row);
-      }
+      mappingStatus.innerHTML = `<div class="hint" style="color:var(--accent);">✓ ${state.imageMappings.length} image-template pair(s) ready for export.</div>`;
+      bulkExportSection.style.display = 'block';
     }
     updateTemplateModeVisibility();
   }
 
-  function addCurrentAsTemplate(){
-    if(!state.bg){ alert('Load a background image first before saving as template.'); return; }
-    const name = prompt('Enter a name for this template:', `Template ${state.templates.length + 1}`);
-    if(!name) return;
-    
-    const template = {
-      name: name.trim(),
-      bg: state.bg,
-      bgNatural: {...state.bgNatural},
-      fields: JSON.parse(JSON.stringify(state.fields))
-    };
-    state.templates.push(template);
-    refreshTemplatesList();
-    alert(`Template "${name}" added to collection.`);
-  }
-
-  function loadTemplateByIndex(index){
-    const t = state.templates[index];
-    if(!t) return;
-    
-    state.bg = t.bg;
-    state.bgNatural = {...t.bgNatural};
-    state.fields = JSON.parse(JSON.stringify(t.fields));
-    state.selectedId = null;
-    
-    bgImg.src = t.bg;
-    bgImg.onload = ()=>{
-      state.scale = 1; bgScale.value=100; applyScale();
-      refreshVarList(); renderOverlays(); updateStatus();
-    };
-  }
-
-  function removeTemplate(index){
-    const t = state.templates[index];
-    if(!confirm(`Remove template "${t.name}"?`)) return;
-    state.templates.splice(index, 1);
-    refreshTemplatesList();
-  }
-
-  function loadMultipleTemplatesFromFiles(files){
-    let loaded = 0;
-    for(const file of files){
-      const reader = new FileReader();
-      reader.onload = ()=>{
-        try{
-          const cfg = JSON.parse(reader.result);
-          const name = file.name.replace('.json', '');
-          const template = {
-            name: name,
-            bg: cfg.bg || null,
-            bgNatural: cfg.bgNatural || {w:0, h:0},
-            fields: cfg.fields || []
-          };
-          state.templates.push(template);
-          loaded++;
-          if(loaded === files.length){
-            refreshTemplatesList();
-            alert(`Loaded ${loaded} template(s) into collection.`);
-          }
-        }catch(err){
-          console.error('Error loading template:', file.name, err);
-        }
-      };
-      reader.readAsText(file);
-    }
-  }
-
   function updateTemplateModeVisibility(){
-    // Show template mode section only if we have templates AND CSV data
-    if(state.templates.length > 0 && state.csvData.length > 1){
-      templateModeSection.style.display = 'block';
-    } else if(state.csvData.length > 1){
+    // Show template mode section only if we have CSV data
+    if(state.csvData.length > 1){
       // Only CSV data, no templates - show but with single mode default
       templateModeSection.style.display = 'block';
     } else {
@@ -710,13 +634,8 @@
   function updateDataDrivenVisibility(){
     if(templateMode.value === 'datadriven'){
       dataDrivenConfig.style.display = 'block';
-      mappedConfig.style.display = 'none';
-    } else if(templateMode.value === 'mapped'){
-      mappedConfig.style.display = 'block';
-      dataDrivenConfig.style.display = 'none';
     } else {
       dataDrivenConfig.style.display = 'none';
-      mappedConfig.style.display = 'none';
     }
   }
   
@@ -852,7 +771,7 @@
       };
     });
     
-    // Also add these as templates to the main templates collection
+    // Also add these as templates to the state.templates array for batch export modes
     for(const mapping of state.imageMappings){
       if(mapping.template){
         const existingIdx = state.templates.findIndex(t => t.name === mapping.templateName);
@@ -867,9 +786,9 @@
       }
     }
     
-    refreshTemplatesList();
+    updateMappingStatus();
     closeMappingModalFn();
-    alert(`Saved ${state.imageMappings.length} image-template mapping(s).`);
+    alert(`Saved ${state.imageMappings.length} image-template pair(s). Ready for bulk export!`);
   }
   
   // Mapping modal event listeners
@@ -897,17 +816,89 @@
     }
   }
 
-  // Event listeners for templates
-  btnAddCurrentTemplate.addEventListener('click', addCurrentAsTemplate);
-  
-  loadMultipleTemplates.addEventListener('change', (e)=>{
-    const files = e.target.files;
-    if(!files || files.length === 0) return;
-    loadMultipleTemplatesFromFiles(files);
-    loadMultipleTemplates.value = '';
-  });
-
   templateMode.addEventListener('change', updateDataDrivenVisibility);
+  
+  // Bulk export all pairs button
+  btnBulkExportAll.addEventListener('click', async () => {
+    if(state.imageMappings.length === 0){
+      alert('No image-template pairs configured. Click the Setup Image-Template Pairs button first.');
+      return;
+    }
+    
+    const format = fmtSel.value;
+    const quality = parseFloat(qInput.value) || 0.92;
+    const scale = parseFloat(exportScaleInput.value) || 1;
+    const totalPairs = state.imageMappings.length;
+    
+    if(!confirm(`Export ${totalPairs} image(s)? This will create one image per pair.`)) return;
+    
+    btnBulkExportAll.disabled = true;
+    btnBulkExportAll.textContent = 'Exporting...';
+    
+    const images = [];
+    const originalState = {
+      bg: state.bg,
+      bgNatural: {...state.bgNatural},
+      fields: JSON.parse(JSON.stringify(state.fields)),
+      variables: {...state.variables}
+    };
+    
+    for(let i = 0; i < totalPairs; i++){
+      const mapping = state.imageMappings[i];
+      
+      // Apply the mapped background image
+      state.bg = mapping.imageData;
+      
+      // Get image dimensions
+      await new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          state.bgNatural = {w: img.naturalWidth, h: img.naturalHeight};
+          resolve();
+        };
+        img.onerror = () => {
+          console.error('Error loading image:', mapping.imageName);
+          state.bgNatural = {w: 800, h: 600};
+          resolve();
+        };
+        img.src = mapping.imageData;
+      });
+      
+      // Apply template fields if available
+      if(mapping.template && mapping.template.fields){
+        state.fields = JSON.parse(JSON.stringify(mapping.template.fields));
+      }
+      
+      const dataURL = await generateImageDataURL(format, quality, scale);
+      const imageName = sanitizeFilename(mapping.imageName.replace(/\.[^.]+$/, ''));
+      images.push({
+        name: `${imageName}.${format.toLowerCase()}`,
+        data: dataURL
+      });
+      
+      btnBulkExportAll.textContent = `Exporting ${i+1}/${totalPairs}...`;
+    }
+    
+    // Restore original state
+    state.bg = originalState.bg;
+    state.bgNatural = {...originalState.bgNatural};
+    state.fields = JSON.parse(JSON.stringify(originalState.fields));
+    state.variables = {...originalState.variables};
+    
+    // Download all images
+    for(const img of images){
+      const a = document.createElement('a');
+      a.href = img.data;
+      a.download = img.name;
+      a.click();
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    btnBulkExportAll.disabled = false;
+    btnBulkExportAll.textContent = 'Export All Pairs';
+    refreshOverlays();
+    alert(`Successfully exported ${images.length} image(s)!`);
+  });
 
   // Background loading
   bgFile.addEventListener('change', async (e)=>{
@@ -1819,7 +1810,7 @@
   }
 
   // Init
-  refreshVarList(); updateStatus(); updateSelectionUI(); refreshTemplatesList();
+  refreshVarList(); updateStatus(); updateSelectionUI(); updateMappingStatus();
 })();
 </script>
 
