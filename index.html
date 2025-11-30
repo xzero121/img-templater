@@ -158,6 +158,19 @@
       <div class="hint" style="margin-top:6px">Templates store variables + field positions/styles.</div>
     </div>
 
+    <div class="card" id="templatesCard">
+      <h2>Templates Collection</h2>
+      <div class="hint">Manage multiple templates for bulk export.</div>
+      <div id="templatesList" style="margin-top:8px; max-height:150px; overflow-y:auto;"></div>
+      <div class="uirow" style="margin-top:8px; gap:8px">
+        <button class="btn" id="btnAddCurrentTemplate">Add Current as Template</button>
+      </div>
+      <div class="uirow" style="margin-top:8px; gap:8px">
+        <input type="file" id="loadMultipleTemplates" accept="application/json" multiple />
+      </div>
+      <div class="hint" style="margin-top:4px">Load multiple JSON templates at once for bulk operations.</div>
+    </div>
+
     <div class="card">
       <h2>Export</h2>
       <div class="uirow" style="align-items:end">
@@ -181,6 +194,20 @@
           <input type="number" id="exportScale" min="1" max="10" step="0.5" value="1" />
         </div>
         <div class="hint" style="flex:1; margin:0; padding-left:8px">Scale export (1x = original size)</div>
+      </div>
+      <div id="templateModeSection" style="display:none; margin-top:8px;">
+        <label>Template Mode (for Batch)</label>
+        <select id="templateMode">
+          <option value="single">Single (Current Template)</option>
+          <option value="random">Random (Random Template per Row)</option>
+          <option value="all">All (Export Each Row with Every Template)</option>
+          <option value="datadriven">Data-Driven (CSV Column Selects Template)</option>
+        </select>
+        <div id="dataDrivenConfig" style="display:none; margin-top:6px;">
+          <label>Template Column (from CSV)</label>
+          <select id="templateColumnSelect"></select>
+          <div class="hint" style="margin-top:4px">Column values should match template names.</div>
+        </div>
       </div>
       <div class="uirow" style="margin-top:8px; gap:8px">
         <button class="btn primary" id="btnExport">Export Image</button>
@@ -251,6 +278,15 @@
     const btnClear = document.getElementById('btnClear');
   const btnBatchExport = document.getElementById('btnBatchExport');
   const batchHint = document.getElementById('batchHint');
+  
+  // Templates collection elements
+  const templatesList = document.getElementById('templatesList');
+  const btnAddCurrentTemplate = document.getElementById('btnAddCurrentTemplate');
+  const loadMultipleTemplates = document.getElementById('loadMultipleTemplates');
+  const templateModeSection = document.getElementById('templateModeSection');
+  const templateMode = document.getElementById('templateMode');
+  const dataDrivenConfig = document.getElementById('dataDrivenConfig');
+  const templateColumnSelect = document.getElementById('templateColumnSelect');
 
   // Comprehensive font list including Google Fonts
   const presetFonts = [  
@@ -319,7 +355,8 @@
     fields: [],
     selectedId: null,
     snapElements: false,
-    csvData: [] // Store all CSV rows for batch export
+    csvData: [], // Store all CSV rows for batch export
+    templates: [] // Store multiple templates for bulk export: [{name, bg, bgNatural, fields}]
   };
 
   // Load Google Fonts dynamically using Web Font Loader
@@ -473,6 +510,7 @@
       if(allData.length > 1){
         btnBatchExport.style.display = 'inline-block';
         batchHint.style.display = 'block';
+        updateTemplateModeVisibility();
         alert(`Loaded ${allData.length} rows from CSV. Use "Batch Export" to generate images for all rows.`);
       } else {
         btnBatchExport.style.display = 'none';
@@ -481,6 +519,136 @@
     };
     reader.readAsText(file);
   });
+
+  // Templates Collection Management
+  function refreshTemplatesList(){
+    templatesList.innerHTML = '';
+    if(state.templates.length === 0){
+      templatesList.appendChild(el('div', {class:'hint'}, 'No templates added yet.'));
+    } else {
+      for(let i = 0; i < state.templates.length; i++){
+        const t = state.templates[i];
+        const row = el('div', {class:'uirow', style:'align-items:center; margin-bottom:6px; padding:4px; background:#1a202c; border-radius:6px;'},
+          el('span', {style:'flex:1; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;'}, t.name),
+          el('button', {class:'btn', style:'padding:4px 8px; font-size:11px;', onclick:(e)=>{ e.stopPropagation(); loadTemplateByIndex(i); }}, 'Load'),
+          el('button', {class:'btn danger', style:'padding:4px 8px; font-size:11px; margin-left:4px;', onclick:(e)=>{ e.stopPropagation(); removeTemplate(i); }}, '×')
+        );
+        templatesList.appendChild(row);
+      }
+    }
+    updateTemplateModeVisibility();
+  }
+
+  function addCurrentAsTemplate(){
+    if(!state.bg){ alert('Load a background image first before saving as template.'); return; }
+    const name = prompt('Enter a name for this template:', `Template ${state.templates.length + 1}`);
+    if(!name) return;
+    
+    const template = {
+      name: name.trim(),
+      bg: state.bg,
+      bgNatural: {...state.bgNatural},
+      fields: JSON.parse(JSON.stringify(state.fields))
+    };
+    state.templates.push(template);
+    refreshTemplatesList();
+    alert(`Template "${name}" added to collection.`);
+  }
+
+  function loadTemplateByIndex(index){
+    const t = state.templates[index];
+    if(!t) return;
+    
+    state.bg = t.bg;
+    state.bgNatural = {...t.bgNatural};
+    state.fields = JSON.parse(JSON.stringify(t.fields));
+    state.selectedId = null;
+    
+    bgImg.src = t.bg;
+    bgImg.onload = ()=>{
+      state.scale = 1; bgScale.value=100; applyScale();
+      refreshVarList(); renderOverlays(); updateStatus();
+    };
+  }
+
+  function removeTemplate(index){
+    const t = state.templates[index];
+    if(!confirm(`Remove template "${t.name}"?`)) return;
+    state.templates.splice(index, 1);
+    refreshTemplatesList();
+  }
+
+  function loadMultipleTemplatesFromFiles(files){
+    let loaded = 0;
+    for(const file of files){
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        try{
+          const cfg = JSON.parse(reader.result);
+          const name = file.name.replace('.json', '');
+          const template = {
+            name: name,
+            bg: cfg.bg || null,
+            bgNatural: cfg.bgNatural || {w:0, h:0},
+            fields: cfg.fields || []
+          };
+          state.templates.push(template);
+          loaded++;
+          if(loaded === files.length){
+            refreshTemplatesList();
+            alert(`Loaded ${loaded} template(s) into collection.`);
+          }
+        }catch(err){
+          console.error('Error loading template:', file.name, err);
+        }
+      };
+      reader.readAsText(file);
+    }
+  }
+
+  function updateTemplateModeVisibility(){
+    // Show template mode section only if we have templates AND CSV data
+    if(state.templates.length > 0 && state.csvData.length > 1){
+      templateModeSection.style.display = 'block';
+    } else if(state.csvData.length > 1){
+      // Only CSV data, no templates - show but with single mode default
+      templateModeSection.style.display = 'block';
+    } else {
+      templateModeSection.style.display = 'none';
+    }
+    updateDataDrivenVisibility();
+    refreshTemplateColumnOptions();
+  }
+
+  function updateDataDrivenVisibility(){
+    if(templateMode.value === 'datadriven'){
+      dataDrivenConfig.style.display = 'block';
+    } else {
+      dataDrivenConfig.style.display = 'none';
+    }
+  }
+
+  function refreshTemplateColumnOptions(){
+    templateColumnSelect.innerHTML = '';
+    if(state.csvData.length > 0){
+      const firstRow = state.csvData[0];
+      for(const key of Object.keys(firstRow)){
+        templateColumnSelect.appendChild(el('option', {value:key}, key));
+      }
+    }
+  }
+
+  // Event listeners for templates
+  btnAddCurrentTemplate.addEventListener('click', addCurrentAsTemplate);
+  
+  loadMultipleTemplates.addEventListener('change', (e)=>{
+    const files = e.target.files;
+    if(!files || files.length === 0) return;
+    loadMultipleTemplatesFromFiles(files);
+    loadMultipleTemplates.value = '';
+  });
+
+  templateMode.addEventListener('change', updateDataDrivenVisibility);
 
   // Background loading
   bgFile.addEventListener('change', async (e)=>{
@@ -994,46 +1162,155 @@
     exportImage(fmtSel.value, parseFloat(qInput.value)||0.92, scale);
   });
 
-  // Batch export for CSV data
+  // Batch export for CSV data with template modes
   btnBatchExport.addEventListener('click', async ()=>{
-    if(!state.bg){ alert('Load a background image first.'); return; }
+    if(!state.bg && state.templates.length === 0){ alert('Load a background image or add templates first.'); return; }
     if(state.csvData.length === 0){ alert('No CSV data loaded.'); return; }
     
     const format = fmtSel.value;
     const quality = parseFloat(qInput.value)||0.92;
     const scale = parseFloat(exportScaleInput.value) || 1;
     const totalRows = state.csvData.length;
+    const mode = templateMode.value;
     
-    if(!confirm(`Export ${totalRows} images? This may take a moment.`)) return;
+    // Validate mode requirements
+    if((mode === 'random' || mode === 'all' || mode === 'datadriven') && state.templates.length === 0){
+      alert('Please add templates to the collection first for the selected mode.');
+      return;
+    }
+    
+    if(mode === 'datadriven'){
+      const columnName = templateColumnSelect.value;
+      if(!columnName){
+        alert('Please select a column for data-driven template selection.');
+        return;
+      }
+    }
+    
+    // Calculate total images to export
+    let totalImages = totalRows;
+    if(mode === 'all'){
+      totalImages = totalRows * state.templates.length;
+    }
+    
+    if(!confirm(`Export ${totalImages} images? This may take a moment.`)) return;
     
     btnBatchExport.disabled = true;
     btnBatchExport.textContent = 'Exporting...';
     
-    // Use JSZip for batch downloads if available, otherwise download individually
     const images = [];
+    const originalState = {
+      bg: state.bg,
+      bgNatural: {...state.bgNatural},
+      fields: JSON.parse(JSON.stringify(state.fields)),
+      variables: {...state.variables}
+    };
     
-    for(let i = 0; i < totalRows; i++){
-      const rowData = state.csvData[i];
+    let imageCount = 0;
+    
+    if(mode === 'single' || state.templates.length === 0){
+      // Single mode: use current template for all rows
+      for(let i = 0; i < totalRows; i++){
+        const rowData = state.csvData[i];
+        state.variables = {...originalState.variables, ...rowData};
+        
+        const dataURL = await generateImageDataURL(format, quality, scale);
+        images.push({
+          name: `flyer-${i+1}.${format.toLowerCase()}`,
+          data: dataURL
+        });
+        imageCount++;
+        btnBatchExport.textContent = `Exporting ${imageCount}/${totalImages}...`;
+      }
+    } else if(mode === 'random'){
+      // Random mode: randomly select a template for each row
+      for(let i = 0; i < totalRows; i++){
+        const rowData = state.csvData[i];
+        const randomTemplate = state.templates[Math.floor(Math.random() * state.templates.length)];
+        
+        // Apply template
+        state.bg = randomTemplate.bg;
+        state.bgNatural = {...randomTemplate.bgNatural};
+        state.fields = JSON.parse(JSON.stringify(randomTemplate.fields));
+        state.variables = {...originalState.variables, ...rowData};
+        
+        const dataURL = await generateImageDataURL(format, quality, scale);
+        images.push({
+          name: `flyer-${i+1}-${sanitizeFilename(randomTemplate.name)}.${format.toLowerCase()}`,
+          data: dataURL
+        });
+        imageCount++;
+        btnBatchExport.textContent = `Exporting ${imageCount}/${totalImages}...`;
+      }
+    } else if(mode === 'all'){
+      // All mode: export each row with every template
+      for(let i = 0; i < totalRows; i++){
+        const rowData = state.csvData[i];
+        
+        for(let j = 0; j < state.templates.length; j++){
+          const template = state.templates[j];
+          
+          // Apply template
+          state.bg = template.bg;
+          state.bgNatural = {...template.bgNatural};
+          state.fields = JSON.parse(JSON.stringify(template.fields));
+          state.variables = {...originalState.variables, ...rowData};
+          
+          const dataURL = await generateImageDataURL(format, quality, scale);
+          images.push({
+            name: `flyer-${i+1}-${sanitizeFilename(template.name)}.${format.toLowerCase()}`,
+            data: dataURL
+          });
+          imageCount++;
+          btnBatchExport.textContent = `Exporting ${imageCount}/${totalImages}...`;
+        }
+      }
+    } else if(mode === 'datadriven'){
+      // Data-driven mode: use column value to select template
+      const columnName = templateColumnSelect.value;
       
-      // Temporarily update variables
-      const originalVars = {...state.variables};
-      state.variables = {...state.variables, ...rowData};
-      
-      // Generate image with scale
-      const dataURL = await generateImageDataURL(format, quality, scale);
-      
-      // Store for download
-      images.push({
-        name: `flyer-${i+1}.${format.toLowerCase()}`,
-        data: dataURL
-      });
-      
-      // Restore original variables
-      state.variables = originalVars;
-      
-      // Update progress
-      btnBatchExport.textContent = `Exporting ${i+1}/${totalRows}...`;
+      for(let i = 0; i < totalRows; i++){
+        const rowData = state.csvData[i];
+        const templateName = (rowData[columnName] || '').trim();
+        
+        // Find matching template by name
+        let selectedTemplate = state.templates.find(t => t.name.toLowerCase() === templateName.toLowerCase());
+        
+        if(!selectedTemplate){
+          // Try partial match
+          selectedTemplate = state.templates.find(t => t.name.toLowerCase().includes(templateName.toLowerCase()) || templateName.toLowerCase().includes(t.name.toLowerCase()));
+        }
+        
+        if(!selectedTemplate && state.templates.length > 0){
+          // Fallback to first template if no match
+          selectedTemplate = state.templates[0];
+          console.warn(`Row ${i+1}: No template match for "${templateName}", using "${selectedTemplate.name}"`);
+        }
+        
+        if(selectedTemplate){
+          // Apply template
+          state.bg = selectedTemplate.bg;
+          state.bgNatural = {...selectedTemplate.bgNatural};
+          state.fields = JSON.parse(JSON.stringify(selectedTemplate.fields));
+        }
+        
+        state.variables = {...originalState.variables, ...rowData};
+        
+        const dataURL = await generateImageDataURL(format, quality, scale);
+        images.push({
+          name: `flyer-${i+1}.${format.toLowerCase()}`,
+          data: dataURL
+        });
+        imageCount++;
+        btnBatchExport.textContent = `Exporting ${imageCount}/${totalImages}...`;
+      }
     }
+    
+    // Restore original state
+    state.bg = originalState.bg;
+    state.bgNatural = {...originalState.bgNatural};
+    state.fields = JSON.parse(JSON.stringify(originalState.fields));
+    state.variables = {...originalState.variables};
     
     // Download all images
     for(const img of images){
@@ -1047,8 +1324,13 @@
     btnBatchExport.disabled = false;
     btnBatchExport.textContent = 'Batch Export';
     refreshOverlays(); // Restore display
-    alert(`Successfully exported ${totalRows} images!`);
+    alert(`Successfully exported ${images.length} images!`);
   });
+  
+  // Helper function to sanitize filename
+  function sanitizeFilename(name){
+    return name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 50);
+  }
   
   // Helper function to generate image as data URL
   function generateImageDataURL(type, quality, scale = 1){
@@ -1219,7 +1501,7 @@
   }
 
   // Init
-  refreshVarList(); updateStatus(); updateSelectionUI();
+  refreshVarList(); updateStatus(); updateSelectionUI(); refreshTemplatesList();
 })();
 </script>
 </body>
