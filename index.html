@@ -1129,13 +1129,14 @@
     // Template mode (new)
     const templateInput = el('textarea', {
       placeholder:'e.g., Hello {{name}}, your price is {{price}}',
-      value: f.template !== undefined ? f.template : '',
       oninput:(e)=>{ 
         f.template = e.target.value; 
         if(f.template) delete f.varKey; 
         refreshOverlays(); 
       }
     });
+    // Set textarea value as property, not attribute (required for textareas)
+    templateInput.value = f.template ?? '';
     fieldInspector.appendChild(inspectorControl('Template (use {{variable}})', templateInput));
     fieldInspector.appendChild(el('div', {class:'hint', style:'margin-bottom:10px'}, 'Use template for multi-variable text, or variable for single value (legacy).'));
 
@@ -1277,20 +1278,33 @@
         // Stroke first (if any), then fill. We'll implement simple wrap that draws both.
         const drawWrapped = (drawStroke=false)=>{
           const txt = (''+text).replace(/\r/g,'');
-          const words = txt.split(/\s+/);
-          let line=''; let yy=0; const lh = f.fontSize * (f.lineHeight||1.2) * scale;
+          const lines = txt.split('\n'); // Split by newlines first
+          let yy=0; const lh = f.fontSize * (f.lineHeight||1.2) * scale;
           const maxWidth = (f.w - 12) * scale;
-          for(let i=0;i<words.length;i++){
-            const t = line ? line+" "+words[i] : words[i];
-            const w = ctx.measureText(t).width;
-            if(maxWidth > 0 && w > maxWidth && i>0){
+          
+          for(const paragraph of lines){
+            if(paragraph === ''){
+              // Empty line (just a newline)
+              yy += lh;
+              continue;
+            }
+            const words = paragraph.split(/\s+/);
+            let line='';
+            for(let i=0;i<words.length;i++){
+              const t = line ? line+" "+words[i] : words[i];
+              const w = ctx.measureText(t).width;
+              if(maxWidth > 0 && w > maxWidth && i>0){
+                if(drawStroke){ ctx.strokeText(line, alignX(f.align, maxWidth), yy); }
+                else { ctx.fillText(line, alignX(f.align, maxWidth), yy); }
+                line=words[i]; yy += lh;
+              } else { line = t; }
+            }
+            if(line){
               if(drawStroke){ ctx.strokeText(line, alignX(f.align, maxWidth), yy); }
               else { ctx.fillText(line, alignX(f.align, maxWidth), yy); }
-              line=words[i]; yy += lh;
-            } else { line = t; }
+            }
+            yy += lh; // Move to next line after paragraph
           }
-          if(drawStroke){ ctx.strokeText(line, alignX(f.align, maxWidth), yy); }
-          else{ ctx.fillText(line, alignX(f.align, maxWidth), yy); }
         }
         function alignX(a, width){ if(a==='center') return width/2; if(a==='right') return width; return 0; }
 
@@ -1681,20 +1695,33 @@
           
           const drawWrapped = (drawStroke=false)=>{
             const txt = (''+text).replace(/\r/g,'');
-            const words = txt.split(/\s+/);
-            let line=''; let yy=0; const lh = f.fontSize * (f.lineHeight||1.2) * scale;
+            const lines = txt.split('\n'); // Split by newlines first
+            let yy=0; const lh = f.fontSize * (f.lineHeight||1.2) * scale;
             const maxWidth = (f.w - 12) * scale;
-            for(let i=0;i<words.length;i++){
-              const t = line ? line+" "+words[i] : words[i];
-              const w = ctx.measureText(t).width;
-              if(maxWidth > 0 && w > maxWidth && i>0){
+            
+            for(const paragraph of lines){
+              if(paragraph === ''){
+                // Empty line (just a newline)
+                yy += lh;
+                continue;
+              }
+              const words = paragraph.split(/\s+/);
+              let line='';
+              for(let i=0;i<words.length;i++){
+                const t = line ? line+" "+words[i] : words[i];
+                const w = ctx.measureText(t).width;
+                if(maxWidth > 0 && w > maxWidth && i>0){
+                  if(drawStroke){ ctx.strokeText(line, alignX(f.align, maxWidth), yy); }
+                  else { ctx.fillText(line, alignX(f.align, maxWidth), yy); }
+                  line=words[i]; yy += lh;
+                } else { line = t; }
+              }
+              if(line){
                 if(drawStroke){ ctx.strokeText(line, alignX(f.align, maxWidth), yy); }
                 else { ctx.fillText(line, alignX(f.align, maxWidth), yy); }
-                line=words[i]; yy += lh;
-              } else { line = t; }
+              }
+              yy += lh; // Move to next line after paragraph
             }
-            if(drawStroke){ ctx.strokeText(line, alignX(f.align, maxWidth), yy); }
-            else{ ctx.fillText(line, alignX(f.align, maxWidth), yy); }
           }
           function alignX(a, width){ if(a==='center') return width/2; if(a==='right') return width; return 0; }
           
@@ -1726,26 +1753,34 @@
       const fontSize = f.fontSize * scale;
       const lineHeight = fontSize * (f.lineHeight || 1.2);
       
-      const words = (''+text).replace(/\r/g,'').split(/\s+/);
+      const txt = (''+text).replace(/\r/g,'');
+      const paragraphs = txt.split('\n'); // Split by newlines first
       const maxWidth = (f.w - 12) * scale;
       let lines = [];
-      let currentLine = '';
       
       const tempCanvas = document.createElement('canvas');
       const tempCtx = tempCanvas.getContext('2d');
       tempCtx.font = `${f.italic? 'italic ':''}${f.bold? '700 ': '400 '} ${fontSize}px ${f.fontFamily}`;
       
-      for(let i = 0; i < words.length; i++){
-        const testLine = currentLine ? currentLine + ' ' + words[i] : words[i];
-        const metrics = tempCtx.measureText(testLine);
-        if(maxWidth > 0 && metrics.width > maxWidth && i > 0){
-          lines.push(currentLine);
-          currentLine = words[i];
-        } else {
-          currentLine = testLine;
+      for(const paragraph of paragraphs){
+        if(paragraph === ''){
+          lines.push(''); // Preserve empty lines
+          continue;
         }
+        const words = paragraph.split(/\s+/);
+        let currentLine = '';
+        for(let i = 0; i < words.length; i++){
+          const testLine = currentLine ? currentLine + ' ' + words[i] : words[i];
+          const metrics = tempCtx.measureText(testLine);
+          if(maxWidth > 0 && metrics.width > maxWidth && i > 0){
+            lines.push(currentLine);
+            currentLine = words[i];
+          } else {
+            currentLine = testLine;
+          }
+        }
+        if(currentLine) lines.push(currentLine);
       }
-      if(currentLine) lines.push(currentLine);
       
       svg += `<g>`;
       
