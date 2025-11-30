@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>📦 Bulk Image Generator</title>
+<style>
+  :root{
+    --bg:#0e1525;
+    --panel:#131c2e;
+    --muted:#1a2236;
+    --text:#eeeef2;
+    --accent:#3b82f6;
+    --accent-2:#22d3ee;
+    --success:#16a34a;
+    --danger:#ef4444;
+    --warning:#f59e0b;
+    --shadow:0 4px 12px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box; font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif}
+  body{margin:0; min-height:100vh; background:var(--bg); color:var(--text); display:flex; flex-direction:column}
+  
+  header{
+    background:var(--panel); border-bottom:1px solid #0008;
+    padding:16px 24px; display:flex; align-items:center; gap:16px;
+  }
+  header h1{margin:0; font-size:20px; font-weight:600}
+  header .back-link{color:var(--accent-2); text-decoration:none; font-size:14px}
+  header .back-link:hover{text-decoration:underline}
+  
+  main{flex:1; padding:24px; overflow:auto}
+  
+  .container{max-width:1400px; margin:0 auto}
+  
+  .card{
+    background:var(--muted); border:1px solid #0008; border-radius:12px;
+    padding:20px; margin-bottom:20px; box-shadow:var(--shadow);
+  }
+  
+  h2{font-size:16px; margin:0 0 16px; color:#a3a3af}
+  h3{font-size:14px; margin:0 0 12px; color:#9ca3af}
+  
+  .hint{font-size:13px; color:#9ca3af; margin-bottom:12px}
+  
+  .upload-section{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px;
+    margin-bottom:20px;
+  }
+  .upload-box{
+    background:var(--panel); border:2px dashed #ffffff33; border-radius:12px;
+    padding:24px; text-align:center; cursor:pointer; transition:all .2s;
+  }
+  .upload-box:hover{border-color:var(--accent-2); background:#1a2540}
+  .upload-box.has-files{border-color:var(--success); border-style:solid}
+  .upload-box h3{margin-bottom:8px}
+  .upload-box .count{font-size:24px; font-weight:700; color:var(--accent-2); margin:12px 0}
+  .upload-box input[type="file"]{display:none}
+  
+  .mode-selector{
+    display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px;
+  }
+  .mode-btn{
+    flex:1; min-width:150px; padding:16px 20px; background:var(--panel);
+    border:2px solid #ffffff22; border-radius:12px; cursor:pointer;
+    transition:all .2s; text-align:left;
+  }
+  .mode-btn:hover{border-color:var(--accent)}
+  .mode-btn.active{border-color:var(--accent-2); background:#1a2540}
+  .mode-btn h4{margin:0 0 4px; font-size:14px; font-weight:600; color:var(--text)}
+  .mode-btn p{margin:0; font-size:12px; color:#9ca3af}
+  
+  .data-driven-config{
+    margin-top:12px; padding:16px; background:var(--panel); border-radius:8px;
+    display:none;
+  }
+  .data-driven-config.visible{display:block}
+  
+  select, input[type="number"]{
+    padding:8px 12px; border-radius:8px; border:1px solid #000a;
+    background:#0c1326; color:var(--text); width:100%;
+  }
+  
+  .btn{
+    background:linear-gradient(180deg, #1e293b, #0b1328); border:1px solid #000;
+    color:var(--text); padding:10px 16px; border-radius:10px; cursor:pointer;
+    font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:8px;
+  }
+  .btn:hover{opacity:.9}
+  .btn.primary{background:linear-gradient(180deg, #16a34a, #128141); border-color:#0b5a2d}
+  .btn.danger{background:linear-gradient(180deg, #ef4444, #b02424); border-color:#5e1313}
+  .btn.accent{background:linear-gradient(180deg, #3b82f6, #2563eb); border-color:#1d4ed8}
+  .btn:disabled{opacity:.5; cursor:not-allowed}
+  
+  .preview-header{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom:16px; flex-wrap:wrap; gap:12px;
+  }
+  .preview-controls{display:flex; gap:8px; flex-wrap:wrap}
+  
+  .preview-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));
+    gap:16px;
+  }
+  
+  .preview-item{
+    background:var(--panel); border-radius:12px; overflow:hidden;
+    cursor:pointer; transition:all .2s; position:relative;
+    border:2px solid transparent;
+  }
+  .preview-item:hover{border-color:var(--accent); transform:translateY(-2px)}
+  .preview-item.selected{border-color:var(--accent-2)}
+  .preview-item img{width:100%; aspect-ratio:16/9; object-fit:contain; background:#0a0f1f}
+  .preview-item .info{padding:12px}
+  .preview-item .row-num{font-size:12px; color:#9ca3af}
+  .preview-item .template-name{font-size:13px; font-weight:500; margin-top:4px}
+  .preview-item .change-btn{
+    position:absolute; top:8px; right:8px; background:rgba(0,0,0,.7);
+    color:#fff; border:none; padding:6px 10px; border-radius:6px;
+    font-size:11px; cursor:pointer; opacity:0; transition:opacity .2s;
+  }
+  .preview-item:hover .change-btn{opacity:1}
+  
+  .enlarged-modal{
+    position:fixed; top:0; left:0; right:0; bottom:0;
+    background:rgba(0,0,0,.85); z-index:1000;
+    display:none; align-items:center; justify-content:center; padding:24px;
+  }
+  .enlarged-modal.visible{display:flex}
+  .enlarged-content{
+    max-width:90vw; max-height:90vh; position:relative;
+  }
+  .enlarged-content img{max-width:100%; max-height:85vh; border-radius:8px; box-shadow:var(--shadow)}
+  .enlarged-close{
+    position:absolute; top:-40px; right:0; background:none; border:none;
+    color:#fff; font-size:32px; cursor:pointer; padding:8px;
+  }
+  .enlarged-info{
+    margin-top:12px; text-align:center; color:#9ca3af; font-size:14px;
+  }
+  .enlarged-nav{
+    display:flex; justify-content:center; gap:12px; margin-top:12px;
+  }
+  
+  .template-picker-modal{
+    position:fixed; top:0; left:0; right:0; bottom:0;
+    background:rgba(0,0,0,.8); z-index:1001;
+    display:none; align-items:center; justify-content:center; padding:24px;
+  }
+  .template-picker-modal.visible{display:flex}
+  .template-picker{
+    background:var(--panel); border-radius:16px; padding:24px;
+    max-width:600px; width:100%; max-height:80vh; overflow-y:auto;
+  }
+  .template-picker h3{margin:0 0 16px; font-size:16px}
+  .template-option{
+    display:flex; align-items:center; gap:12px; padding:12px;
+    background:var(--muted); border-radius:8px; margin-bottom:8px;
+    cursor:pointer; border:2px solid transparent; transition:all .2s;
+  }
+  .template-option:hover{border-color:var(--accent)}
+  .template-option.selected{border-color:var(--accent-2)}
+  .template-option .name{font-weight:500}
+  
+  .progress-bar{
+    width:100%; height:8px; background:var(--panel); border-radius:4px;
+    overflow:hidden; margin:16px 0;
+  }
+  .progress-bar .fill{height:100%; background:var(--accent-2); transition:width .3s}
+  
+  .status-message{
+    padding:12px 16px; border-radius:8px; margin-bottom:16px;
+    font-size:14px; display:none;
+  }
+  .status-message.visible{display:block}
+  .status-message.success{background:#16a34a33; border:1px solid #16a34a}
+  .status-message.error{background:#ef444433; border:1px solid #ef4444}
+  .status-message.info{background:#3b82f633; border:1px solid #3b82f6}
+  
+  .empty-state{
+    text-align:center; padding:60px 20px; color:#9ca3af;
+  }
+  .empty-state h3{font-size:18px; margin-bottom:8px; color:var(--text)}
+  
+  /* Mapping styles */
+  .mapping-row{
+    display:flex; gap:12px; align-items:center; padding:12px;
+    background:var(--panel); border-radius:8px; margin-bottom:8px;
+  }
+  .mapping-image{width:80px; height:60px; object-fit:contain; background:#0a0f1f; border-radius:6px; border:1px solid #0008}
+  .mapping-info{flex:1; min-width:0}
+  .mapping-name{font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .mapping-preview{font-size:11px; color:#9ca3af; margin-top:2px}
+  .mapping-select{flex:0 0 200px}
+  
+  footer{
+    background:var(--panel); border-top:1px solid #0008; padding:12px 24px;
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;
+  }
+  .stats{font-size:13px; color:#9ca3af}
+</style>
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,700;1,400;1,700&family=Open+Sans:ital,wght@0,400;0,700;1,400;1,700&family=Lato:ital,wght@0,400;0,700;1,400;1,700&family=Montserrat:ital,wght@0,400;0,700;1,400;1,700&family=Oswald:wght@400;700&family=Raleway:ital,wght@0,400;0,700;1,400;1,700&family=Poppins:ital,wght@0,400;0,700;1,400;1,700&family=Merriweather:ital,wght@0,400;0,700;1,400;1,700&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&family=Noto+Sans:ital,wght@0,400;0,700;1,400;1,700&family=Nunito:ital,wght@0,400;0,700;1,400;1,700&family=Ubuntu:ital,wght@0,400;0,700;1,400;1,700&family=Quicksand:wght@400;700&family=Dancing+Script:wght@400;700&family=Pacifico&family=Lobster&family=Bebas+Neue&family=Indie+Flower&family=Shadows+Into+Light&family=Abril+Fatface&family=Righteous&family=Anton&family=Permanent+Marker&family=Cabin:ital,wght@0,400;0,700;1,400;1,700&family=Crimson+Text:ital,wght@0,400;0,700;1,400;1,700&family=Bitter:ital,wght@0,400;0,700;1,400;1,700&family=Arvo:ital,wght@0,400;0,700;1,400;1,700&family=Great+Vibes&family=Satisfy&family=Amatic+SC:wght@400;700&family=Caveat:wght@400;700&family=Courgette&family=Kaushan+Script&family=Parisienne&family=Architects+Daughter&family=Handlee&family=Patrick+Hand&family=Mountains+of+Christmas:wght@400;700&family=Snowburst+One&family=Rye&family=Piedra&family=Fontdiner+Swanky&family=Ranchers&family=Ewert&family=Butcherman&family=Eater&family=Creepster&family=Nosifer&family=Flavors&family=Freckle+Face&family=Jolly+Lodger&family=New+Rocker&family=Fascinate&family=Fascinate+Inline&family=Sancreek&family=Diplomata+SC&family=Almendra+Display&family=Henny+Penny&family=Emblema+One&family=Asset&family=Bungee+Shade&family=Rubik+Moonrocks&family=Rubik+Beastly&display=swap" rel="stylesheet">
+<!-- JSZip for ZIP file creation -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+
+<header>
+  <h1>📦 Bulk Image Generator</h1>
+</header>
+
+<main>
+  <div class="container">
+    
+    <!-- Status Message -->
+    <div id="statusMessage" class="status-message"></div>
+    
+    <!-- Step 1: Upload Files -->
+    <div class="card">
+      <h2>1. Upload Files</h2>
+      <div class="hint">Upload your background images, template JSON files (created in the Template Designer), and CSV data.</div>
+      
+      <div class="upload-section">
+        <label class="upload-box" id="imagesUpload">
+          <h3>📷 Background Images</h3>
+          <p class="hint">Click to select images</p>
+          <div class="count" id="imagesCount">0</div>
+          <p>files selected</p>
+          <input type="file" id="imagesInput" accept="image/*" multiple />
+        </label>
+        
+        <label class="upload-box" id="templatesUpload">
+          <h3>📄 Template JSON Files</h3>
+          <p class="hint">Click to select templates</p>
+          <div class="count" id="templatesCount">0</div>
+          <p>files selected</p>
+          <input type="file" id="templatesInput" accept=".json,application/json" multiple />
+        </label>
+        
+        <label class="upload-box" id="csvUpload">
+          <h3>📊 CSV Data</h3>
+          <p class="hint">Click to select CSV</p>
+          <div class="count" id="csvCount">0</div>
+          <p>rows loaded</p>
+          <input type="file" id="csvInput" accept=".csv,text/csv" />
+        </label>
+      </div>
+    </div>
+    
+    <!-- Step 2: Choose Mode -->
+    <div class="card">
+      <h2>2. Choose Export Mode</h2>
+      <div class="hint">Select how templates should be applied to each row.</div>
+      
+      <div class="mode-selector">
+        <button class="mode-btn active" data-mode="one-each">
+          <h4>📝 One Template per Row</h4>
+          <p>Each CSV row uses the same image-template pair in order</p>
+        </button>
+        <button class="mode-btn" data-mode="random">
+          <h4>🎲 Random</h4>
+          <p>Each row randomly picks from available templates</p>
+        </button>
+        <button class="mode-btn" data-mode="data-driven">
+          <h4>📊 Data-Driven</h4>
+          <p>CSV column value determines which template to use</p>
+        </button>
+      </div>
+      
+      <div class="data-driven-config" id="dataDrivenConfig">
+        <label style="display:block; margin-bottom:8px; font-size:13px; color:#a3a3af">Template Column (from CSV)</label>
+        <select id="templateColumnSelect">
+          <option value="">-- Select column --</option>
+        </select>
+        <p class="hint" style="margin-top:8px">Column values should contain or match part of the template file names</p>
+      </div>
+    </div>
+    
+    <!-- Step 3: Image-Template Mapping -->
+    <div class="card" id="mappingCard" style="display:none">
+      <h2>3. Map Images to Templates</h2>
+      <div class="hint">Assign a template to each background image.</div>
+      <div id="mappingList"></div>
+    </div>
+    
+    <!-- Step 4: Generate Previews -->
+    <div class="card">
+      <h2>3. Preview & Export</h2>
+      
+      <div class="preview-header">
+        <button class="btn accent" id="generateBtn" disabled>
+          🔄 Generate Previews
+        </button>
+        <div class="preview-controls">
+          <button class="btn primary" id="saveAllBtn" disabled>
+            💾 Save All as ZIP
+          </button>
+          <button class="btn" id="saveOneByOneBtn" disabled>
+            📥 Save One by One
+          </button>
+        </div>
+      </div>
+      
+      <div class="progress-bar" id="progressBar" style="display:none">
+        <div class="fill" id="progressFill" style="width:0%"></div>
+      </div>
+      
+      <div id="previewArea">
+        <div class="empty-state">
+          <h3>No previews yet</h3>
+          <p>Upload files and click "Generate Previews" to see your exports.</p>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+</main>
+
+<!-- Enlarged Image Modal -->
+<div class="enlarged-modal" id="enlargedModal">
+  <div class="enlarged-content">
+    <button class="enlarged-close" id="enlargedClose">&times;</button>
+    <img id="enlargedImg" src="" alt="Enlarged preview" />
+    <div class="enlarged-info" id="enlargedInfo"></div>
+    <div class="enlarged-nav">
+      <button class="btn" id="enlargedPrev">← Previous</button>
+      <button class="btn" id="enlargedChangeTemplate">Change Template</button>
+      <button class="btn" id="enlargedNext">Next →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Template Picker Modal -->
+<div class="template-picker-modal" id="templatePickerModal">
+  <div class="template-picker">
+    <h3>Choose a Different Template</h3>
+    <div id="templateOptions"></div>
+    <div style="display:flex; gap:8px; margin-top:16px">
+      <button class="btn" id="templatePickerCancel">Cancel</button>
+      <button class="btn primary" id="templatePickerApply">Apply</button>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="stats" id="footerStats">Ready to export</div>
+</footer>
+
+<script>
+(function(){
+  'use strict';
+  
+  // State
+  const state = {
+    images: [],      // [{name, dataUrl, width, height}]
+    templates: [],   // [{name, data}]
+    csvData: [],     // Array of row objects
+    csvHeaders: [],  // Column names
+    mode: 'one-each',
+    templateColumn: '',
+    mappings: [],    // [{imageIndex, templateIndex}] - maps each image to a template
+    previews: [],    // [{rowIndex, imageIndex, templateIndex, dataUrl, variables}]
+    currentEnlargedIndex: -1,
+    selectedTemplateForChange: -1
+  };
+  
+  // DOM Elements
+  const imagesInput = document.getElementById('imagesInput');
+  const templatesInput = document.getElementById('templatesInput');
+  const csvInput = document.getElementById('csvInput');
+  const imagesCount = document.getElementById('imagesCount');
+  const templatesCount = document.getElementById('templatesCount');
+  const csvCount = document.getElementById('csvCount');
+  const imagesUpload = document.getElementById('imagesUpload');
+  const templatesUpload = document.getElementById('templatesUpload');
+  const csvUpload = document.getElementById('csvUpload');
+  const modeBtns = document.querySelectorAll('.mode-btn');
+  const dataDrivenConfig = document.getElementById('dataDrivenConfig');
+  const templateColumnSelect = document.getElementById('templateColumnSelect');
+  const mappingCard = document.getElementById('mappingCard');
+  const mappingList = document.getElementById('mappingList');
+  const generateBtn = document.getElementById('generateBtn');
+  const saveAllBtn = document.getElementById('saveAllBtn');
+  const saveOneByOneBtn = document.getElementById('saveOneByOneBtn');
+  const progressBar = document.getElementById('progressBar');
+  const progressFill = document.getElementById('progressFill');
+  const previewArea = document.getElementById('previewArea');
+  const statusMessage = document.getElementById('statusMessage');
+  const footerStats = document.getElementById('footerStats');
+  const enlargedModal = document.getElementById('enlargedModal');
+  const enlargedImg = document.getElementById('enlargedImg');
+  const enlargedInfo = document.getElementById('enlargedInfo');
+  const enlargedClose = document.getElementById('enlargedClose');
+  const enlargedPrev = document.getElementById('enlargedPrev');
+  const enlargedNext = document.getElementById('enlargedNext');
+  const enlargedChangeTemplate = document.getElementById('enlargedChangeTemplate');
+  const templatePickerModal = document.getElementById('templatePickerModal');
+  const templateOptions = document.getElementById('templateOptions');
+  const templatePickerCancel = document.getElementById('templatePickerCancel');
+  const templatePickerApply = document.getElementById('templatePickerApply');
+  
+  // Show status message
+  function showStatus(message, type = 'info') {
+    statusMessage.textContent = message;
+    statusMessage.className = `status-message visible ${type}`;
+    setTimeout(() => statusMessage.classList.remove('visible'), 5000);
+  }
+  
+  // Update footer stats
+  function updateStats() {
+    const parts = [];
+    if (state.images.length) parts.push(`${state.images.length} images`);
+    if (state.templates.length) parts.push(`${state.templates.length} templates`);
+    if (state.csvData.length) parts.push(`${state.csvData.length} CSV rows`);
+    if (state.previews.length) parts.push(`${state.previews.length} previews`);
+    footerStats.textContent = parts.length ? parts.join(' • ') : 'Ready to export';
+  }
+  
+  // Check if we can generate previews
+  function updateGenerateButton() {
+    const canGenerate = state.images.length > 0 && 
+                        state.templates.length > 0 && 
+                        state.csvData.length > 0;
+    generateBtn.disabled = !canGenerate;
+  }
+  
+  // Handle image upload
+  imagesInput.addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files);
+    state.images = [];
+    
+    for (const file of files) {
+      const dataUrl = await readFileAsDataURL(file);
+      const dimensions = await getImageDimensions(dataUrl);
+      state.images.push({
+        name: file.name,
+        dataUrl,
+        width: dimensions.width,
+        height: dimensions.height
+      });
+    }
+    
+    imagesCount.textContent = state.images.length;
+    imagesUpload.classList.toggle('has-files', state.images.length > 0);
+    updateMappings();
+    updateGenerateButton();
+    updateStats();
+  });
+  
+  // Handle template upload
+  templatesInput.addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files);
+    state.templates = [];
+    
+    for (const file of files) {
+      try {
+        const text = await readFileAsText(file);
+        const data = JSON.parse(text);
+        state.templates.push({
+          name: file.name.replace(/\.json$/i, ''),
+          data
+        });
+      } catch (err) {
+        showStatus(`Error loading ${file.name}: ${err.message}`, 'error');
+      }
+    }
+    
+    templatesCount.textContent = state.templates.length;
+    templatesUpload.classList.toggle('has-files', state.templates.length > 0);
+    updateMappings();
+    updateGenerateButton();
+    updateStats();
+  });
+  
+  // Handle CSV upload
+  csvInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    try {
+      const text = await readFileAsText(file);
+      const rows = parseCSV(text);
+      
+      if (rows.length < 2) {
+        showStatus('CSV must have at least a header row and one data row', 'error');
+        return;
+      }
+      
+      state.csvHeaders = rows[0];
+      state.csvData = rows.slice(1).map(row => {
+        const obj = {};
+        state.csvHeaders.forEach((h, i) => obj[h] = row[i] || '');
+        return obj;
+      });
+      
+      csvCount.textContent = state.csvData.length;
+      csvUpload.classList.toggle('has-files', state.csvData.length > 0);
+      
+      // Update template column dropdown
+      templateColumnSelect.innerHTML = '<option value="">-- Select column --</option>';
+      state.csvHeaders.forEach(h => {
+        templateColumnSelect.innerHTML += `<option value="${h}">${h}</option>`;
+      });
+      
+      updateGenerateButton();
+      updateStats();
+      showStatus(`Loaded ${state.csvData.length} rows from CSV`, 'success');
+    } catch (err) {
+      showStatus(`Error loading CSV: ${err.message}`, 'error');
+    }
+  });
+  
+  // Mode selection
+  modeBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      modeBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.mode = btn.dataset.mode;
+      dataDrivenConfig.classList.toggle('visible', state.mode === 'data-driven');
+    });
+  });
+  
+  // Template column selection
+  templateColumnSelect.addEventListener('change', (e) => {
+    state.templateColumn = e.target.value;
+  });
+  
+  // Update image-template mappings UI
+  function updateMappings() {
+    if (state.images.length === 0 || state.templates.length === 0) {
+      mappingCard.style.display = 'none';
+      return;
+    }
+    
+    mappingCard.style.display = 'block';
+    mappingList.innerHTML = '';
+    
+    // Initialize mappings if needed
+    if (state.mappings.length !== state.images.length) {
+      state.mappings = state.images.map((_, i) => ({
+        imageIndex: i,
+        templateIndex: i % state.templates.length
+      }));
+    }
+    
+    state.images.forEach((img, i) => {
+      const row = document.createElement('div');
+      row.className = 'mapping-row';
+      row.innerHTML = `
+        <img src="${img.dataUrl}" class="mapping-image" alt="${img.name}" />
+        <div class="mapping-info">
+          <div class="mapping-name">${img.name}</div>
+          <div class="mapping-preview">${img.width}×${img.height}</div>
+        </div>
+        <select class="mapping-select" data-index="${i}">
+          ${state.templates.map((t, ti) => 
+            `<option value="${ti}" ${state.mappings[i]?.templateIndex === ti ? 'selected' : ''}>${t.name}</option>`
+          ).join('')}
+        </select>
+      `;
+      mappingList.appendChild(row);
+      
+      row.querySelector('select').addEventListener('change', (e) => {
+        state.mappings[i].templateIndex = parseInt(e.target.value);
+      });
+    });
+  }
+  
+  // Generate previews
+  generateBtn.addEventListener('click', async () => {
+    if (!state.images.length || !state.templates.length || !state.csvData.length) {
+      showStatus('Please upload images, templates, and CSV data first', 'error');
+      return;
+    }
+    
+    generateBtn.disabled = true;
+    progressBar.style.display = 'block';
+    state.previews = [];
+    
+    const total = state.csvData.length;
+    
+    for (let rowIndex = 0; rowIndex < state.csvData.length; rowIndex++) {
+      const variables = state.csvData[rowIndex];
+      
+      // Determine which template to use based on mode
+      let templateIndex = 0;
+      let imageIndex = 0;
+      
+      if (state.mode === 'one-each') {
+        // Use mappings in order, cycling through
+        const mappingIndex = rowIndex % state.mappings.length;
+        imageIndex = state.mappings[mappingIndex].imageIndex;
+        templateIndex = state.mappings[mappingIndex].templateIndex;
+      } else if (state.mode === 'random') {
+        // Random selection
+        const mappingIndex = Math.floor(Math.random() * state.mappings.length);
+        imageIndex = state.mappings[mappingIndex].imageIndex;
+        templateIndex = state.mappings[mappingIndex].templateIndex;
+      } else if (state.mode === 'data-driven') {
+        // Find template by column value
+        const templateName = (variables[state.templateColumn] || '').toLowerCase().trim();
+        const foundIndex = state.templates.findIndex(t => 
+          t.name.toLowerCase().includes(templateName) || 
+          templateName.includes(t.name.toLowerCase())
+        );
+        if (foundIndex >= 0) {
+          templateIndex = foundIndex;
+          // Find matching image from mappings
+          const mapping = state.mappings.find(m => m.templateIndex === foundIndex);
+          imageIndex = mapping ? mapping.imageIndex : 0;
+        }
+      }
+      
+      // Generate the image
+      const template = state.templates[templateIndex];
+      const image = state.images[imageIndex];
+      
+      try {
+        const dataUrl = await generateImage(image, template, variables);
+        state.previews.push({
+          rowIndex,
+          imageIndex,
+          templateIndex,
+          dataUrl,
+          variables
+        });
+      } catch (err) {
+        console.error('Error generating preview:', err);
+      }
+      
+      // Update progress
+      const progress = ((rowIndex + 1) / total) * 100;
+      progressFill.style.width = `${progress}%`;
+    }
+    
+    progressBar.style.display = 'none';
+    generateBtn.disabled = false;
+    saveAllBtn.disabled = state.previews.length === 0;
+    saveOneByOneBtn.disabled = state.previews.length === 0;
+    
+    renderPreviews();
+    updateStats();
+    showStatus(`Generated ${state.previews.length} previews`, 'success');
+  });
+  
+  // Render preview grid
+  function renderPreviews() {
+    if (state.previews.length === 0) {
+      previewArea.innerHTML = `
+        <div class="empty-state">
+          <h3>No previews yet</h3>
+          <p>Upload files and click "Generate Previews" to see your exports.</p>
+        </div>
+      `;
+      return;
+    }
+    
+    previewArea.innerHTML = '<div class="preview-grid" id="previewGrid"></div>';
+    const grid = document.getElementById('previewGrid');
+    
+    state.previews.forEach((preview, index) => {
+      const template = state.templates[preview.templateIndex];
+      const item = document.createElement('div');
+      item.className = 'preview-item';
+      item.dataset.index = index;
+      item.innerHTML = `
+        <img src="${preview.dataUrl}" alt="Preview ${index + 1}" />
+        <button class="change-btn">Change Template</button>
+        <div class="info">
+          <div class="row-num">Row ${preview.rowIndex + 1}</div>
+          <div class="template-name">${template.name}</div>
+        </div>
+      `;
+      
+      item.addEventListener('click', (e) => {
+        if (e.target.classList.contains('change-btn')) {
+          openTemplatePicker(index);
+        } else {
+          openEnlarged(index);
+        }
+      });
+      
+      grid.appendChild(item);
+    });
+  }
+  
+  // Open enlarged view
+  function openEnlarged(index) {
+    state.currentEnlargedIndex = index;
+    const preview = state.previews[index];
+    const template = state.templates[preview.templateIndex];
+    
+    enlargedImg.src = preview.dataUrl;
+    enlargedInfo.textContent = `Row ${preview.rowIndex + 1} • Template: ${template.name}`;
+    enlargedModal.classList.add('visible');
+    
+    updateEnlargedNav();
+  }
+  
+  function updateEnlargedNav() {
+    enlargedPrev.disabled = state.currentEnlargedIndex <= 0;
+    enlargedNext.disabled = state.currentEnlargedIndex >= state.previews.length - 1;
+  }
+  
+  enlargedClose.addEventListener('click', () => {
+    enlargedModal.classList.remove('visible');
+  });
+  
+  enlargedPrev.addEventListener('click', () => {
+    if (state.currentEnlargedIndex > 0) {
+      openEnlarged(state.currentEnlargedIndex - 1);
+    }
+  });
+  
+  enlargedNext.addEventListener('click', () => {
+    if (state.currentEnlargedIndex < state.previews.length - 1) {
+      openEnlarged(state.currentEnlargedIndex + 1);
+    }
+  });
+  
+  enlargedChangeTemplate.addEventListener('click', () => {
+    enlargedModal.classList.remove('visible');
+    openTemplatePicker(state.currentEnlargedIndex);
+  });
+  
+  // Template picker
+  function openTemplatePicker(previewIndex) {
+    state.currentEnlargedIndex = previewIndex;
+    const preview = state.previews[previewIndex];
+    state.selectedTemplateForChange = preview.templateIndex;
+    
+    templateOptions.innerHTML = '';
+    state.templates.forEach((template, i) => {
+      const option = document.createElement('div');
+      option.className = `template-option ${i === preview.templateIndex ? 'selected' : ''}`;
+      option.dataset.index = i;
+      option.innerHTML = `<span class="name">${template.name}</span>`;
+      option.addEventListener('click', () => {
+        document.querySelectorAll('.template-option').forEach(o => o.classList.remove('selected'));
+        option.classList.add('selected');
+        state.selectedTemplateForChange = i;
+      });
+      templateOptions.appendChild(option);
+    });
+    
+    templatePickerModal.classList.add('visible');
+  }
+  
+  templatePickerCancel.addEventListener('click', () => {
+    templatePickerModal.classList.remove('visible');
+  });
+  
+  templatePickerApply.addEventListener('click', async () => {
+    const previewIndex = state.currentEnlargedIndex;
+    const preview = state.previews[previewIndex];
+    const newTemplateIndex = state.selectedTemplateForChange;
+    
+    if (newTemplateIndex !== preview.templateIndex) {
+      // Find an image that uses this template
+      const mapping = state.mappings.find(m => m.templateIndex === newTemplateIndex);
+      const imageIndex = mapping ? mapping.imageIndex : preview.imageIndex;
+      
+      // Regenerate the preview
+      const template = state.templates[newTemplateIndex];
+      const image = state.images[imageIndex];
+      
+      try {
+        const dataUrl = await generateImage(image, template, preview.variables);
+        state.previews[previewIndex] = {
+          ...preview,
+          imageIndex,
+          templateIndex: newTemplateIndex,
+          dataUrl
+        };
+        renderPreviews();
+        showStatus('Template changed successfully', 'success');
+      } catch (err) {
+        showStatus('Error regenerating preview', 'error');
+      }
+    }
+    
+    templatePickerModal.classList.remove('visible');
+  });
+  
+  // Save all as ZIP
+  saveAllBtn.addEventListener('click', async () => {
+    if (state.previews.length === 0) return;
+    
+    saveAllBtn.disabled = true;
+    saveAllBtn.textContent = '⏳ Creating ZIP...';
+    
+    try {
+      const zip = new JSZip();
+      
+      state.previews.forEach((preview, i) => {
+        // Convert data URL to blob
+        const base64 = preview.dataUrl.split(',')[1];
+        const binary = atob(base64);
+        const array = new Uint8Array(binary.length);
+        for (let j = 0; j < binary.length; j++) {
+          array[j] = binary.charCodeAt(j);
+        }
+        
+        const filename = `export_row${preview.rowIndex + 1}_${i + 1}.png`;
+        zip.file(filename, array);
+      });
+      
+      const content = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(content);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `bulk_export_${Date.now()}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      showStatus(`Saved ${state.previews.length} images as ZIP`, 'success');
+    } catch (err) {
+      showStatus('Error creating ZIP file', 'error');
+      console.error(err);
+    }
+    
+    saveAllBtn.disabled = false;
+    saveAllBtn.textContent = '💾 Save All as ZIP';
+  });
+  
+  // Save one by one
+  saveOneByOneBtn.addEventListener('click', async () => {
+    if (state.previews.length === 0) return;
+    
+    for (let i = 0; i < state.previews.length; i++) {
+      const preview = state.previews[i];
+      const a = document.createElement('a');
+      a.href = preview.dataUrl;
+      a.download = `export_row${preview.rowIndex + 1}_${i + 1}.png`;
+      a.click();
+      
+      // Small delay between downloads
+      await new Promise(r => setTimeout(r, 100));
+    }
+    
+    showStatus(`Downloaded ${state.previews.length} images`, 'success');
+  });
+  
+  // Close modals on escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      enlargedModal.classList.remove('visible');
+      templatePickerModal.classList.remove('visible');
+    }
+  });
+  
+  // Utility functions
+  function readFileAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+  
+  function readFileAsText(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsText(file);
+    });
+  }
+  
+  function getImageDimensions(dataUrl) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      img.src = dataUrl;
+    });
+  }
+  
+  function parseCSV(text) {
+    const rows = [];
+    const lines = text.split(/\r?\n/);
+    
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      
+      const row = [];
+      let current = '';
+      let inQuotes = false;
+      
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        
+        if (char === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          row.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      row.push(current.trim());
+      rows.push(row);
+    }
+    
+    return rows;
+  }
+  
+  // Generate image from template and variables
+  async function generateImage(image, template, variables) {
+    return new Promise((resolve) => {
+      const templateData = template.data;
+      const fields = templateData.fields || [];
+      const bgNatural = { w: image.width, h: image.height };
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = bgNatural.w;
+      canvas.height = bgNatural.h;
+      const ctx = canvas.getContext('2d');
+      
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        
+        // Draw each field
+        for (const f of fields) {
+          const text = getFieldText(f, variables);
+          ctx.save();
+          ctx.translate(f.x + 6, f.y + 6);
+          
+          ctx.font = `${f.italic ? 'italic ' : ''}${f.bold ? '700 ' : '400 '} ${f.fontSize}px ${f.fontFamily}`;
+          ctx.textBaseline = 'top';
+          ctx.fillStyle = f.color || '#fff';
+          ctx.lineWidth = f.strokeWidth || 0;
+          if (f.strokeWidth > 0) ctx.strokeStyle = f.strokeColor || '#000';
+          
+          ctx.textAlign = f.align === 'center' ? 'center' : (f.align === 'right' ? 'right' : 'left');
+          
+          // Draw wrapped text with newline support
+          const txt = String(text || '').replace(/\r/g, '');
+          const lines = txt.split('\n');
+          let yy = 0;
+          const lh = f.fontSize * (f.lineHeight || 1.2);
+          const maxWidth = f.w - 12;
+          
+          function alignX(a, width) {
+            if (a === 'center') return width / 2;
+            if (a === 'right') return width;
+            return 0;
+          }
+          
+          for (const paragraph of lines) {
+            if (paragraph === '') {
+              yy += lh;
+              continue;
+            }
+            const words = paragraph.split(/\s+/);
+            let line = '';
+            for (let i = 0; i < words.length; i++) {
+              const t = line ? line + ' ' + words[i] : words[i];
+              const w = ctx.measureText(t).width;
+              if (maxWidth > 0 && w > maxWidth && i > 0) {
+                if (f.strokeWidth > 0) ctx.strokeText(line, alignX(f.align, maxWidth), yy);
+                ctx.fillText(line, alignX(f.align, maxWidth), yy);
+                line = words[i];
+                yy += lh;
+              } else {
+                line = t;
+              }
+            }
+            if (line) {
+              if (f.strokeWidth > 0) ctx.strokeText(line, alignX(f.align, maxWidth), yy);
+              ctx.fillText(line, alignX(f.align, maxWidth), yy);
+            }
+            yy += lh;
+          }
+          
+          ctx.restore();
+        }
+        
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.src = image.dataUrl;
+    });
+  }
+  
+  // Get text for a field, resolving template or varKey
+  function getFieldText(f, variables) {
+    if (f.template !== undefined) {
+      return resolveTemplate(f.template, variables);
+    }
+    if (f.varKey) {
+      return variables[f.varKey] || '';
+    }
+    return '';
+  }
+  
+  // Resolve template string with variables
+  function resolveTemplate(template, variables) {
+    if (!template) return '';
+    return template.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
+      return variables[varName] !== undefined ? variables[varName] : match;
+    });
+  }
+  
+})();
+</script>
+
+</body>
+</html>
