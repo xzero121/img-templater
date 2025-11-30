@@ -580,6 +580,8 @@
     state.previews = [];
     
     const total = state.csvData.length;
+
+    let lastMappingIndex = -1; 
     
     for (let rowIndex = 0; rowIndex < state.csvData.length; rowIndex++) {
       const variables = state.csvData[rowIndex];
@@ -587,7 +589,7 @@
       // Determine which template to use based on mode
       let templateIndex = 0;
       let imageIndex = 0;
-      
+
       if (state.mode === 'one-each') {
         // Use mappings in order, cycling through
         const mappingIndex = rowIndex % state.mappings.length;
@@ -595,7 +597,13 @@
         templateIndex = state.mappings[mappingIndex].templateIndex;
       } else if (state.mode === 'random') {
         // Random selection
-        const mappingIndex = Math.floor(Math.random() * state.mappings.length);
+        let mappingIndex;
+        do {
+          mappingIndex = Math.floor(Math.random() * state.mappings.length);
+        } while (mappingIndex === lastMappingIndex && state.mappings.length > 1);
+        
+        lastMappingIndex = mappingIndex;
+        
         imageIndex = state.mappings[mappingIndex].imageIndex;
         templateIndex = state.mappings[mappingIndex].templateIndex;
       } else if (state.mode === 'data-driven') {
